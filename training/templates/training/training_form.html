@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{% if mode == "edit" %}Edit training{% else %}Create training{% endif %}</title>
+</head>
+<body>
+
+<h1>{% if mode == "edit" %}Edit training{% else %}Create training{% endif %}</h1>
+
+{% if messages %}
+  <ul>
+    {% for message in messages %}
+      <li>{{ message }}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">{% if mode == "edit" %}Save changes{% else %}Save{% endif %}</button>
+</form>
+
+<p>
+  <a href="/calendar/">← Back to calendar</a>
+  {% if mode == "edit" %}
+    | <a href="{% url 'training_detail' training.pk %}">Back to training</a>
+  {% endif %}
+</p>
+
+</body>
+</html>

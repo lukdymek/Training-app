@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Trainers</title>
+</head>
+<body>
+<h1>Trainers</h1>
+
+<form method="get">
+  <input type="text" name="q" placeholder="Search SYSPER ID or name/email" value="{{ q|default:'' }}">
+  <button type="submit">Search</button>
+</form>
+
+<p>
+  <a href="/calendar/">Calendar</a> |
+  <a href="/trainings/">Trainings</a>
+</p>
+
+{% if not searched %}
+  <p>Type SYSPER ID, last name, first name, or email and press Search.</p>
+{% else %}
+  {% if trainers %}
+    <ul>
+      {% for t in trainers %}
+        <li>
+          <a href="{% url 'trainer_detail' t.pk %}">
+            {{ t.sysper_id }} — {{ t.last_name }} {{ t.first_name }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No trainers found.</p>
+  {% endif %}
+{% endif %}
+
+</body>
+</html>

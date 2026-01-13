@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ training.course_name }}</title>
+</head>
+<body>
+
+<h1>{{ training.course_name }}</h1>
+
+<p>
+  <a href="{% url 'training_edit' training.pk %}">Edit training</a> |
+  <a href="{% url 'training_delete' training.pk %}">Delete training</a>
+</p>
+
+<p>
+<strong>When:</strong> {{ training.start_at }} → {{ training.end_at }}<br>
+<strong>Where:</strong> {{ training.location }}<br>
+<strong>Capacity:</strong> {{ trainees|length }} / {{ training.capacity }}
+</p>
+
+<h2>Add trainee</h2>
+
+<form method="post" action="{% url 'add_trainee' training.pk %}">
+  {% csrf_token %}
+  <input type="text" name="sysper_id" placeholder="SYSPER ID" required>
+  <button type="submit">Add</button>
+</form>
+
+{% if messages %}
+  <ul>
+    {% for message in messages %}
+      <li>{{ message }}</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+<h2>Trainees</h2>
+<ul>
+{% for p in trainees %}
+  <li> {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}</li>
+{% empty %}
+  <li>No trainees yet.</li>
+{% endfor %}
+</ul>
+
+
+<h2>Add trainer</h2>
+
+<form method="post" action="{% url 'add_trainer' training.pk %}">
+  {% csrf_token %}
+  <input type="text" name="sysper_id" placeholder="SYSPER ID" required>
+  <button type="submit">Add</button>
+</form>
+
+
+<h2>Trainers</h2>
+
+<ul>
+{% for p in trainers %}
+  <li>
+    {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}
+
+    <form method="post" action="{% url 'update_trainer_days' training.pk p.pk %}" style="display:inline; margin-left:12px;">
+      {% csrf_token %}
+      <label style="margin-right:6px;">Days:</label>
+      <input type="text" name="days" value="{{ p.days|default_if_none:'' }}" style="width:70px;">
+      <button type="submit">Save</button>
+    </form>
+  </li>
+{% empty %}
+  <li>No trainers yet.</li>
+{% endfor %}
+</ul>
+
+
+<p>
+<a href="/trainings/">← Back to trainings</a>
+</p>
+
+</body>
+</html>

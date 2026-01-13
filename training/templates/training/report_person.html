@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Person history</title></head>
+<body>
+<h1>Person training history</h1>
+
+<form method="get">
+  <input type="text" name="sysper_id" placeholder="SYSPER ID" value="{{ sysper }}">
+  <button type="submit">Search</button>
+</form>
+
+{% if sysper and not person %}
+  <p>Person not found.</p>
+{% endif %}
+
+{% if person %}
+  <h2>{{ person.last_name }} {{ person.first_name }} ({{ person.sysper_id }})</h2>
+  <p><a href="{% url 'report_person_export' %}?sysper_id={{ person.sysper_id }}">Export CSV</a></p>
+
+  <table border="1" cellpadding="6" cellspacing="0">
+    <tr>
+      <th>Role</th><th>Course</th><th>Subject</th><th>Start</th><th>End</th><th>Location</th>
+    </tr>
+    {% for p in rows %}
+      <tr>
+        <td>{{ p.role }}</td>
+        <td><a href="{% url 'training_detail' p.training.pk %}">{{ p.training.course_name }}</a></td>
+        <td>{% if p.training.subject %}{{ p.training.subject.name }}{% endif %}</td>
+        <td>{{ p.training.start_at }}</td>
+        <td>{{ p.training.end_at }}</td>
+        <td>{{ p.training.location }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6">No records.</td></tr>
+    {% endfor %}
+  </table>
+{% endif %}
+
+<p><a href="{% url 'reports_home' %}">← Back to reports</a></p>
+</body>
+</html>

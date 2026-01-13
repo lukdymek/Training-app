@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Trainer {{ trainer }}</title>
+</head>
+<body>
+
+<h1>{{ trainer.last_name }} {{ trainer.first_name }} ({{ trainer.sysper_id }})</h1>
+<p>Email: {{ trainer.email }}</p>
+<p>Category: {{ trainer.category }} | Deployment: {{ trainer.current_deployment }}</p>
+
+<p><a href="{% url 'trainer_list' %}">← Back to trainer list</a></p>
+
+<h2>Skills (Subjects)</h2>
+<ul>
+  {% for s in skills %}
+    <li>
+      {{ s.subject.name }}
+      <a href="{% url 'remove_trainer_skill' trainer.pk s.subject.pk %}">Remove</a>
+    </li>
+  {% empty %}
+    <li>No skills yet.</li>
+  {% endfor %}
+</ul>
+
+<h3>Add skill</h3>
+<form method="post" action="{% url 'add_trainer_skill' trainer.pk %}">
+  {% csrf_token %}
+  <select name="subject_id" required>
+    <option value="">-- select subject --</option>
+    {% for subj in all_subjects %}
+      <option value="{{ subj.id }}">{{ subj.name }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Add</button>
+</form>
+
+<h2>Recent trainings taught</h2>
+<ul>
+  {% for p in trainings_as_trainer %}
+    <li>
+      <a href="{% url 'training_detail' p.training.pk %}">
+        {{ p.training.course_name }}
+      </a>
+      ({{ p.training.start_at }} → {{ p.training.end_at }})
+    </li>
+  {% empty %}
+    <li>No trainer assignments yet.</li>
+  {% endfor %}
+</ul>
+
+</body>
+</html>

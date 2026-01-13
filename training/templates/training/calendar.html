@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Training Calendar</title>
+
+  <!-- FullCalendar via CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #calendar { max-width: 1100px; margin: 0 auto; }
+    .topbar { max-width: 1100px; margin: 0 auto 12px auto; display:flex; gap:12px; align-items:center; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1 style="margin:0;">Calendar</h1>
+  <a href="/trainings/">Trainings list</a>
+</div>
+
+<div class="topbar" style="justify-content: space-between;">
+  <div style="display:flex; gap:10px; align-items:center;">
+    <label>
+      Subject:
+      <select id="subjectFilter">
+        <option value="">All</option>
+      </select>
+    </label>
+
+    <label>
+      Location:
+      <select id="locationFilter">
+        <option value="">All</option>
+      </select>
+    </label>
+
+    <button id="clearFilters" type="button">Clear</button>
+  </div>
+
+  <a href="/trainings/new/">Add training</a>
+</div>
+
+<div id="calendar"></div>
+
+<div id="tooltip" style="
+  position: absolute;
+  display: none;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 8px;
+  font-size: 12px;
+  z-index: 9999;
+  max-width: 320px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+"></div>
+
+
+<script>
+  document.addEventListener('DOMContentLoaded', async function() {
+    const calendarEl = document.getElementById('calendar');
+    const tooltip = document.getElementById('tooltip');
+
+    const subjectFilter = document.getElementById('subjectFilter');
+    const locationFilter = document.getElementById('locationFilter');
+    const clearBtn = document.getElementById('clearFilters');
+
+    // Simple subject->color mapping (stable per subject name)
+    function subjectColor(subjectName) {
+      if (!subjectName || subjectName === "—") return "";
+      // create a deterministic "hash" number
+      let hash = 0;
+      for (let i = 0; i < subjectName.length; i++) hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
+      // convert hash to HSL
+      const hue = Math.abs(hash) % 360;
+      return `hsl(${hue}, 60%, 55%)`;
+    }
+
+    // Build URL for events with filters
+    function eventsUrl() {
+      const params = new URLSearchParams();
+      if (subjectFilter.value) params.set("subject_id", subjectFilter.value);
+      if (locationFilter.value) params.set("location", locationFilter.value);
+      const qs = params.toString();
+      return "/api/trainings/" + (qs ? "?" + qs : "");
+    }
+
+    // Load filter options
+    const filterResp = await fetch("/api/calendar-filters/");
+    const filterData = await filterResp.json();
+
+    // subjects
+    for (const s of filterData.subjects) {
+      const opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = s.name;
+      subjectFilter.appendChild(opt);
+    }
+
+    // locations
+    for (const loc of filterData.locations) {
+      const opt = document.createElement("option");
+      opt.value = loc;
+      opt.textContent = loc;
+      locationFilter.appendChild(opt);
+    }
+
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      displayEventTime: false,
+      height: "auto",
+      navLinks: true,
+      nowIndicator: true,
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,timeGridDay'
+      },
+
+      dateClick: function(info) {
+        window.location.href = "/trainings/new/?start=" + info.dateStr;
+      },
+
+      events: function(fetchInfo, successCallback, failureCallback) {
+        fetch(eventsUrl())
+          .then(r => r.json())
+          .then(data => successCallback(data))
+          .catch(err => failureCallback(err));
+      },
+
+      eventDidMount: function(info) {
+        // Color by subject
+        const subject = info.event.extendedProps.subject;
+        const color = subjectColor(subject);
+        if (color) {
+          info.el.style.backgroundColor = color;
+          info.el.style.borderColor = color;
+        }
+
+        // Tooltip handlers
+        info.el.addEventListener("mouseenter", (e) => {
+          const p = info.event.extendedProps;
+          tooltip.innerHTML = `
+            <div><strong>${info.event.title}</strong></div>
+            <div><strong>Subject:</strong> ${p.subject || "—"}</div>
+            <div><strong>Location:</strong> ${p.location || "—"}</div>
+            <div><strong>Capacity:</strong> ${p.capacity_used ?? 0} / ${p.capacity_total ?? 0}</div>
+          `;
+          tooltip.style.display = "block";
+        });
+
+        info.el.addEventListener("mousemove", (e) => {
+          tooltip.style.left = (e.pageX + 12) + "px";
+          tooltip.style.top = (e.pageY + 12) + "px";
+        });
+
+        info.el.addEventListener("mouseleave", () => {
+          tooltip.style.display = "none";
+        });
+      },
+
+      eventClick: function(info) {
+        if (info.event.url) {
+          window.location.href = info.event.url;
+          info.jsEvent.preventDefault();
+        }
+      }
+    });
+
+    calendar.render();
+
+    function refetch() {
+      tooltip.style.display = "none";
+      calendar.refetchEvents();
+    }
+
+    subjectFilter.addEventListener("change", refetch);
+    locationFilter.addEventListener("change", refetch);
+    clearBtn.addEventListener("click", () => {
+      subjectFilter.value = "";
+      locationFilter.value = "";
+      refetch();
+    });
+  });
+</script>
+
+
+</body>
+</html>
