@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -31,6 +33,7 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",") if not DEBUG else
 
 CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if os.environ.get("CSRF_TRUSTED_ORIGINS") else []
 
+IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT") is not None  
 # Application definition
 
 INSTALLED_APPS = [
@@ -87,11 +90,12 @@ DATABASES = {
         "PASSWORD": os.environ.get("PGPASSWORD"),
         "HOST": os.environ.get("PGHOST"),
         "PORT": os.environ.get("PGPORT", "5432"),
-        "OPTIONS": {"sslmode": "require"},
+        
     }
 }
 
-
+if IS_RAILWAY:
+    DATABASES["default"]["OPTIONS"] = {"sslmode": "require"}
 
 
 # Password validation
