@@ -29,7 +29,7 @@ DEBUG = os.environ.get("DEBUG", "0") == "1"
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only")
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",") if not DEBUG else ["*"]
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",") if not os.environ.get("DEBUG") == "1" else ["*"]
 
 CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if os.environ.get("CSRF_TRUSTED_ORIGINS") else []
 
