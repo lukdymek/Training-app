@@ -6,7 +6,7 @@
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
       <div>
         <h1 style="margin:0 0 6px;">
-          {{ person.last_name }} {{ person.first_name }}
+          {{ person.last_name|upper }} {{ person.first_name }}
         </h1>
         <p class="help" style="margin:0;">
           SYSPER ID: <strong>{{ person.sysper_id }}</strong>

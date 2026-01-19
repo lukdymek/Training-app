@@ -116,7 +116,7 @@
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
         <div style="font-weight:800;">
-          {{ person.last_name }} {{ person.first_name }}
+          {{ person.last_name|upper }} {{ person.first_name }}
           <span class="pill" style="margin-left:8px;">SYSPER ID: {{ person.sysper_id }}</span>
         </div>
         <div class="pill">Records: {{ rows|length }}</div>

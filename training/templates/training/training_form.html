@@ -3,7 +3,13 @@
 
 {% block content %}
   <div class="card">
-    <h1>Create training</h1>
+    <h1 style="margin:0 0 6px;">{{ page_title|default:"Training" }}</h1>
+    {% if is_edit and training %}
+  <p class="help" style="margin:0 0 12px;">
+    Editing: <strong>{{ training.course_name }}</strong>
+  </p>
+{% endif %}
+
     <p class="help">Fill in the details below. You can add trainees and trainers after saving.</p>
 
     <form method="post">
@@ -47,8 +53,11 @@
       </div>
 
       <div class="actions">
-        <button class="btn" type="submit">Save</button>
-        <a class="btn secondary" href="{% url 'calendar' %}">Back to calendar</a>
+        <button class="btn" type="submit">{{ submit_label|default:"Save" }}</button>
+        <a class="btn secondary"
+        href="{% if is_edit and training %}{% url 'training_detail' training.pk %}{% else %}{% url 'calendar' %}{% endif %}">
+        Back
+      </a>
       </div>
     </form>
   </div>

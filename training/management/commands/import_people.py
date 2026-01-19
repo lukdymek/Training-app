@@ -56,13 +56,14 @@ class Command(BaseCommand):
             return None
 
         idx_sysper = pick("sysper_id", "sysperid", "sysper", "id")
-        idx_first = pick("first_name", "firstname", "first")
-        idx_last = pick("last_name", "lastname", "last", "surname")
+        idx_first = pick("first_name", "firstname", "first", "name", "given_name")
+        idx_last  = pick("last_name", "lastname", "last", "surname", "family_name")
         idx_email = pick("email", "email_address", "e-mail")
         idx_dob = pick("dob", "date_of_birth", "birth_date")
         idx_gender = pick("gender", "sex")
         idx_category = pick("category", "employee_category", "cat")
-        idx_deploy = pick("current_deployment", "deployment", "current_assignment")
+        idx_deploy = pick("current_deployment", "deployment", "current_assignment", "deployed")
+
 
         if idx_sysper is None:
             raise Exception(

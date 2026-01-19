@@ -38,7 +38,8 @@
         <li style="display:flex; justify-content:space-between; gap:12px; align-items:center; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--input-bg);">
           <div>
             <div style="font-weight:700;">
-              {{ person.last_name }} {{ person.first_name }}
+           {{ person.last_name|upper }} {{ person.first_name }}
+
             </div>
             <div class="small" style="color:var(--muted);">
               SYSPER ID: {{ person.sysper_id }}
@@ -96,7 +97,7 @@
 
         li.innerHTML = `
           <div>
-            <div style="font-weight:700;">${p.last_name} ${p.first_name}</div>
+            <div style="font-weight:700;">${(p.last_name || "").toUpperCase()} ${p.first_name || ""}</div>
             <div class="small" style="color:var(--muted);">SYSPER ID: ${p.sysper_id}</div>
           </div>
           <div style="display:flex; gap:10px; align-items:center;">

@@ -128,7 +128,7 @@
         {% for p in trainees %}
           <div class="rowline">
             <div class="rowleft">
-              <div class="rowtitle">{{ p.person.last_name }} {{ p.person.first_name }}</div>
+              <div class="rowtitle">{{ p.person.last_name|upper }} {{ p.person.first_name }}</div>
               <div class="rowsub">SYSPER ID: {{ p.person.sysper_id }}</div>
             </div>
 
@@ -189,7 +189,7 @@
         {% for p in trainers %}
           <div class="rowline">
             <div class="rowleft">
-              <div class="rowtitle">{{ p.person.last_name }} {{ p.person.first_name }}</div>
+              <div class="rowtitle">{{ p.person.last_name |upper}} {{ p.person.first_name }}</div>
               <div class="rowsub">SYSPER ID: {{ p.person.sysper_id }}</div>
             </div>
 

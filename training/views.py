@@ -245,7 +245,12 @@ def training_create(request):
     else:
         form = TrainingForm(initial=initial)
 
-    return render(request, "training/training_form.html", {"form": form})
+    return render(request, "training/training_form.html", {
+        "form": form,
+        "page_title": "Create training",
+        "submit_label": "Create",
+    })
+
 
 def training_edit(request, pk):
     training = get_object_or_404(Training, pk=pk)
@@ -271,7 +276,14 @@ def training_edit(request, pk):
     else:
         form = TrainingForm(instance=training)
 
-    return render(request, "training/training_form.html", {"form": form, "mode": "edit", "training": training})
+    return render(request, "training/training_form.html", {
+        "form": form,
+        "training": training,
+        "page_title": "Edit training",
+        "submit_label": "Save changes",
+        "is_edit": True,
+    })
+
 
 
 def training_delete(request, pk):
@@ -734,30 +746,23 @@ def people_search_api(request):
     if len(q) < 2:
         return JsonResponse({"results": []})
 
-    qs = Person.objects.all()
+    qs = Person.objects.filter(
+        Q(sysper_id__icontains=q) |
+        Q(last_name__icontains=q) |
+        Q(first_name__icontains=q) |
+        Q(email__icontains=q)
+    ).order_by("last_name", "first_name")[:25]
 
-    if q.isdigit():
-        qs = qs.filter(
-            Q(sysper_id__startswith=int(q)) |
-            Q(first_name__icontains=q) |
-            Q(last_name__icontains=q)
-        )
-    else:
-        qs = qs.filter(
-            Q(first_name__icontains=q) |
-            Q(last_name__icontains=q)
-        )
+    results = []
+    
+    for p in qs:
+        results.append({
+            "id": p.id,
+            "sysper_id": p.sysper_id,
+            "first_name": p.first_name,
+            "last_name": p.last_name,
+            # Display label used by dropdowns
+            "label": f"{p.sysper_id} — {p.last_name.upper()} {p.first_name}",
+        })
 
-    qs = qs.order_by("last_name", "first_name")[:50]
-
-    return JsonResponse({
-        "results": [
-            {
-                "id": p.id,
-                "sysper_id": p.sysper_id,
-                "first_name": p.first_name,
-                "last_name": p.last_name,
-            }
-            for p in qs
-        ]
-    })
+    return JsonResponse({"results": results})
