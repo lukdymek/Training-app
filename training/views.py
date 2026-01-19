@@ -11,7 +11,7 @@ from django.utils.timezone import localtime
 from .models import Person, TrainerSkill, Subject, Participation, Training
 import csv
 from django.http import HttpResponse
-from django.db.models import Sum, Q
+from django.db.models import Sum
 from django.utils.timezone import localtime
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -25,6 +25,11 @@ from training.constants import SYSPER_LABEL
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from .forms import AddMultipleTrainersForm
+from django.db.models import Prefetch
+from django.utils.timezone import now
+from django.core.paginator import Paginator
+from django.utils.http import urlencode
+
 
 
 def training_list(request):
@@ -656,3 +661,94 @@ def add_trainers_bulk(request, pk):
     return redirect("training_detail", pk=pk)
 
 
+def person_history(request, person_id):
+    person = get_object_or_404(Person, pk=person_id)
+    t = now()
+
+    base_qs = (
+        Participation.objects
+        .filter(person=person)
+        .select_related("training", "training__subject")
+    )
+
+    completed = base_qs.filter(training__end_at__lt=t).order_by("-training__end_at", "-training__start_at")
+    upcoming = base_qs.filter(training__start_at__gte=t).order_by("training__start_at")
+
+    # Optional: include "ongoing" trainings (started but not ended yet)
+    ongoing = base_qs.filter(training__start_at__lt=t, training__end_at__gte=t).order_by("training__end_at")
+
+    return render(
+        request,
+        "training/person_history.html",
+        {
+            "person": person,
+            "completed": completed,
+            "upcoming": upcoming,
+            "ongoing": ongoing,
+        },
+    )
+
+def people_list(request):
+    q = (request.GET.get("q") or "").strip()
+
+    people = Person.objects.all().order_by("last_name", "first_name")
+
+    if q:
+        if q.isdigit():
+            people = people.filter(
+                Q(sysper_id__startswith=int(q)) |
+                Q(first_name__icontains=q) |
+                Q(last_name__icontains=q)
+            )
+        else:
+            people = people.filter(
+                Q(first_name__icontains=q) |
+                Q(last_name__icontains=q)
+            )
+
+    paginator = Paginator(people, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(
+        request,
+        "training/people_list.html",
+        {
+            "q": q,
+            "page_obj": page_obj,
+        },
+    )
+
+@require_GET
+def people_search_api(request):
+    q = (request.GET.get("q") or "").strip()
+
+    if len(q) < 2:
+        return JsonResponse({"results": []})
+
+    qs = Person.objects.all()
+
+    if q.isdigit():
+        qs = qs.filter(
+            Q(sysper_id__startswith=int(q)) |
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q)
+        )
+    else:
+        qs = qs.filter(
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q)
+        )
+
+    qs = qs.order_by("last_name", "first_name")[:50]
+
+    return JsonResponse({
+        "results": [
+            {
+                "id": p.id,
+                "sysper_id": p.sysper_id,
+                "first_name": p.first_name,
+                "last_name": p.last_name,
+            }
+            for p in qs
+        ]
+    })

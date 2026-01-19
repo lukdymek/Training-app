@@ -1,0 +1,72 @@
+<h1>People</h1>
+
+<input type="text" id="people-search" value="{{ q }}" placeholder="Type 2+ characters to search..." autocomplete="off">
+<p id="people-count"></p>
+
+<ul id="people-results">
+  {% for person in page_obj.object_list %}
+    <li>
+      {{ person.sysper_id }} — {{ person.last_name }} {{ person.first_name }}
+      <a href="{% url 'person_history' person.id %}">History</a>
+    </li>
+  {% empty %}
+    <li>No people found.</li>
+  {% endfor %}
+</ul>
+
+<script>
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  const input = document.getElementById("people-search");
+  const list = document.getElementById("people-results");
+  const count = document.getElementById("people-count");
+
+  const searchUrl = "{% url 'people_search_api' %}";
+  const historyBase = "/people/";  // uses your existing URL: /people/<id>/history/
+
+  function render(results) {
+    list.innerHTML = "";
+    count.textContent = results.length ? `${results.length} match(es)` : "";
+
+    if (!results.length) {
+      const li = document.createElement("li");
+      li.textContent = "No people found.";
+      list.appendChild(li);
+      return;
+    }
+
+    for (const p of results) {
+      const li = document.createElement("li");
+      li.innerHTML = `${p.sysper_id} — ${p.last_name} ${p.first_name} `
+        + `<a href="${historyBase}${p.id}/history/">History</a>`;
+      list.appendChild(li);
+    }
+  }
+
+  const doSearch = debounce(async () => {
+    const q = input.value.trim();
+
+    if (q.length < 2) {
+      // optional: clear results when less than 2 chars
+      count.textContent = "";
+      return;
+    }
+
+    const res = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`, {
+      headers: { "Accept": "application/json" }
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+    render(data.results || []);
+  }, 250);
+
+  input.addEventListener("input", doSearch);
+</script>

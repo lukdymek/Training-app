@@ -1,0 +1,85 @@
+<h1>{{ person.last_name }} {{ person.first_name }} — {{ person.sysper_id }}</h1>
+
+<h2>Upcoming trainings</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Training</th>
+      <th>Role</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Location</th>
+      <th>Subject</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in upcoming %}
+      <tr>
+        <td><a href="{% url 'training_detail' p.training.id %}">{{ p.training.course_name }}</a></td>
+        <td>{{ p.role }}</td>
+        <td>{{ p.training.start_at }}</td>
+        <td>{{ p.training.end_at }}</td>
+        <td>{{ p.training.location }}</td>
+        <td>{% if p.training.subject %}{{ p.training.subject.name }}{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6">No upcoming trainings.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if ongoing %}
+  <h2>Ongoing trainings</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Training</th>
+        <th>Role</th>
+        <th>Start</th>
+        <th>End</th>
+        <th>Location</th>
+        <th>Subject</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in ongoing %}
+        <tr>
+          <td><a href="{% url 'training_detail' p.training.id %}">{{ p.training.course_name }}</a></td>
+          <td>{{ p.role }}</td>
+          <td>{{ p.training.start_at }}</td>
+          <td>{{ p.training.end_at }}</td>
+          <td>{{ p.training.location }}</td>
+          <td>{% if p.training.subject %}{{ p.training.subject.name }}{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+<h2>Completed trainings</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Training</th>
+      <th>Role</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Location</th>
+      <th>Subject</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in completed %}
+      <tr>
+        <td><a href="{% url 'training_detail' p.training.id %}">{{ p.training.course_name }}</a></td>
+        <td>{{ p.role }}</td>
+        <td>{{ p.training.start_at }}</td>
+        <td>{{ p.training.end_at }}</td>
+        <td>{{ p.training.location }}</td>
+        <td>{% if p.training.subject %}{{ p.training.subject.name }}{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6">No completed trainings.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

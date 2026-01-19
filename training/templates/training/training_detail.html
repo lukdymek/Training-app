@@ -6,6 +6,8 @@
 </head>
 <body>
 
+
+
 <h1>{{ training.course_name }}</h1>
 
 <p>
@@ -49,6 +51,7 @@
 {% for p in trainees %}
   <li>
     {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}
+    <a href="{% url 'person_history' p.person.id %}">History</a>
     <form method="post"
           action="{% url 'remove_participation' training.pk p.id %}"
           style="display:inline;">
@@ -93,6 +96,7 @@
 {% for p in trainers %}
   <li>
     {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}
+    <a href="{% url 'person_history' p.person.id %}">History</a>
     <form method="post"
           action="{% url 'remove_participation' training.pk p.id %}"
           style="display:inline;">
