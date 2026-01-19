@@ -139,6 +139,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+TEMPLATES[0]["DIRS"] = [BASE_DIR / "templates"]
 
 STORAGES = {
     "staticfiles": {

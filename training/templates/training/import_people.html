@@ -1,0 +1,25 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <h1>Import People from Excel</h1>
+
+  {% if errors %}
+    <div class="errornote">
+      <ul>
+        {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if warnings %}
+    <p><strong>Warnings:</strong></p>
+    <ul>
+      {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="default" type="submit">Upload and preview</button>
+  </form>
+{% endblock %}

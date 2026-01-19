@@ -19,6 +19,8 @@ class Person(models.Model):
     gender = models.CharField(max_length=20, blank=True)
     category = models.CharField(max_length=50, blank=True)
     current_deployment = models.CharField(max_length=120, blank=True)
+    is_active = models.BooleanField(default=True)
+
 
     def __str__(self):
         return f"{self.last_name} {self.first_name} ({self.sysper_id})"
