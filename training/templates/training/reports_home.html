@@ -1,16 +1,58 @@
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Reports</title></head>
-<body>
-<h1>Reports</h1>
-<ul>
-  <li><a href="{% url 'report_person' %}">Person training history</a></li>
-  <li><a href="{% url 'report_trainers' %}">Trainer days per month</a></li>
-</ul>
+{% extends "training/base.html" %}
+{% block title %}Reports{% endblock %}
 
-<p>
-  <a href="/calendar/">Calendar</a> |
-  <a href="/trainings/">Trainings</a>
-</p>
-</body>
-</html>
+{% block content %}
+  <style>
+    .report-card{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:14px;
+      border:1px solid var(--border);
+      border-radius:16px;
+      background: var(--input-bg);
+    }
+    .report-title{
+      font-weight:800;
+      font-size:16px;
+    }
+    .report-desc{
+      color: var(--muted);
+      font-size:14px;
+    }
+  </style>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">Reports</h1>
+        <p class="help" style="margin:0;">Generate summaries and exports from your training data.</p>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'calendar' %}">Calendar</a>
+        <a class="btn secondary" href="{% url 'training_list' %}">Trainings</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:14px;">
+      <a href="{% url 'report_person' %}" class="report-card">
+        <div class="report-title">Person training history</div>
+        <div class="report-desc">
+          View completed, ongoing, and upcoming trainings for a selected person.
+        </div>
+      </a>
+
+      <a href="{% url 'report_trainers' %}" class="report-card">
+        <div class="report-title">Trainer days per month</div>
+        <div class="report-desc">
+          See how many days each trainer has delivered training in a given month.
+        </div>
+      </a>
+    </div>
+  </div>
+{% endblock %}

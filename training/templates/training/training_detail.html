@@ -1,187 +1,278 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>{{ training.course_name }}</title>
-</head>
-<body>
+{% extends "training/base.html" %}
+{% block title %}{{ training.course_name }}{% endblock %}
 
+{% block content %}
 
+  <style>
+    .rowline{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background: var(--input-bg);
+    }
+    .rowleft{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width: 0;
+    }
+    .rowtitle{
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 560px;
+    }
+    .rowsub{
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .rowactions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .inlineform{ display:inline; margin:0; }
+    .results{
+      list-style:none;
+      padding:0;
+      margin:10px 0 0;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .result-item{
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background: var(--card);
+      cursor:pointer;
+    }
+    .result-item:hover{ border-color: #9ca3af; }
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+    }
+    @media (max-width: 820px){
+      .grid2{ grid-template-columns: 1fr; }
+      .rowtitle{ max-width: 100%; }
+    }
+  </style>
 
-<h1>{{ training.course_name }}</h1>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">{{ training.course_name }}</h1>
+        <p class="help" style="margin:0;">
+          <strong>When:</strong> {{ training.start_at }} → {{ training.end_at }}<br>
+          <strong>Where:</strong> {{ training.location }}<br>
+          <strong>Capacity:</strong> {{ trainees|length }} / {{ training.capacity }}
+          {% if training.subject %}<br><strong>Subject:</strong> {{ training.subject.name }}{% endif %}
+        </p>
+      </div>
 
-<p>
-  <a href="{% url 'training_edit' training.pk %}">Edit training</a> |
-  <a href="{% url 'training_delete' training.pk %}">Delete training</a>
-</p>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'training_list' %}">Back to trainings</a>
+        <a class="btn secondary" href="{% url 'training_edit' training.pk %}">Edit</a>
+        <a class="btn danger" href="{% url 'training_delete' training.pk %}">Delete</a>
+      </div>
+    </div>
 
-<p>
-<strong>When:</strong> {{ training.start_at }} → {{ training.end_at }}<br>
-<strong>Where:</strong> {{ training.location }}<br>
-<strong>Capacity:</strong> {{ trainees|length }} / {{ training.capacity }}
-</p>
+    {% if messages %}
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        {% for message in messages %}
+          <div style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background: var(--card); margin-bottom:10px;">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
 
-<h2>Add trainee</h2>
+  <div style="height:14px;"></div>
 
-<form id="add-trainee-form" method="post" action="{% url 'add_trainee' training.pk %}">
-  {% csrf_token %}
-  <input type="hidden" name="sysper_id" id="trainee-sysper-id">
-</form>
+  <div class="grid2">
+    <!-- LEFT: Trainees -->
+    <div class="card">
+      <h2 style="margin:0 0 12px;">Trainees</h2>
 
-<input type="text" id="trainee-search" placeholder="Search trainee by name or SYSPER ID..." autocomplete="off">
-<ul id="trainee-results"></ul>
+      <div class="form-row">
+        <label for="trainee-search">Add trainee</label>
 
-<!-- Keep your old manual input as a fallback if you want -->
-<form method="post" action="{% url 'add_trainee' training.pk %}">
-  {% csrf_token %}
-  <input type="text" name="sysper_id" placeholder="SYSPER ID" required>
-  <button type="submit">Add by SYSPER ID</button>
-</form>
+        <form id="add-trainee-form" method="post" action="{% url 'add_trainee' training.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="sysper_id" id="trainee-sysper-id">
+        </form>
 
-{% if messages %}
-  <ul>
-    {% for message in messages %}
-      <li>{{ message }}</li>
-    {% endfor %}
-  </ul>
-{% endif %}
+        <input type="text" id="trainee-search" placeholder="Type 2+ chars (name or SYSPER ID)..." autocomplete="off">
+        <ul id="trainee-results" class="results"></ul>
 
-<h2>Trainees</h2>
-<ul>
-{% for p in trainees %}
-  <li>
-    {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}
-    <a href="{% url 'person_history' p.person.id %}">History</a>
-    <form method="post"
-          action="{% url 'remove_participation' training.pk p.id %}"
-          style="display:inline;">
-      {% csrf_token %}
-      <button type="submit"
-              onclick="return confirm('Remove this person from the training?')">
-        Remove
-      </button>
-    </form>
-  </li>
-{% empty %}
-  <li>No trainees yet.</li>
-{% endfor %}
-</ul>
+        <div class="help" style="margin-top:6px;">Fallback (manual add):</div>
+        <form method="post" action="{% url 'add_trainee' training.pk %}" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          {% csrf_token %}
+          <input type="text" name="sysper_id" placeholder="SYSPER ID" required style="max-width:220px;">
+          <button class="btn secondary" type="submit">Add</button>
+        </form>
+      </div>
 
+      <div style="height:12px;"></div>
 
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        {% for p in trainees %}
+          <div class="rowline">
+            <div class="rowleft">
+              <div class="rowtitle">{{ p.person.last_name }} {{ p.person.first_name }}</div>
+              <div class="rowsub">SYSPER ID: {{ p.person.sysper_id }}</div>
+            </div>
 
-<h2>Add trainer</h2>
+            <div class="rowactions">
+              <a class="btn secondary small" href="{% url 'person_history' p.person.id %}">History</a>
 
-<form id="add-trainer-form" method="post" action="{% url 'add_trainer' training.pk %}">
-  {% csrf_token %}
-  <input type="hidden" name="sysper_id" id="trainer-sysper-id">
-</form>
+              <form method="post" action="{% url 'remove_participation' training.pk p.id %}" class="inlineform">
+                {% csrf_token %}
+                <button class="btn danger small" type="submit"
+                        onclick="return confirm('Remove this person from the training?')">
+                  Remove
+                </button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <div style="color:var(--muted);">No trainees yet.</div>
+        {% endfor %}
+      </div>
+    </div>
 
-<input type="text" id="trainer-search" placeholder="Search trainer by name or SYSPER ID..." autocomplete="off">
-<ul id="trainer-results"></ul>
+    <!-- RIGHT: Trainers -->
+    <div class="card">
+      <h2 style="margin:0 0 12px;">Trainers</h2>
 
-<h3>Available trainers (have required skill + not booked)</h3>
+      <div class="form-row">
+        <label for="trainer-search">Add trainer</label>
 
-{% if not training.subject %}
-  <p>This training has no subject set, so available trainers can’t be suggested.</p>
-{% else %}
-  <form method="post" action="{% url 'add_trainers_bulk' training.pk %}">
-    {% csrf_token %}
-    {{ bulk_trainers_form.as_p }}
-    <button type="submit">Add selected trainers</button>
-  </form>
-{% endif %}
+        <form id="add-trainer-form" method="post" action="{% url 'add_trainer' training.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="sysper_id" id="trainer-sysper-id">
+        </form>
 
-<h2>Trainers</h2>
-<ul>
-{% for p in trainers %}
-  <li>
-    {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}
-    <a href="{% url 'person_history' p.person.id %}">History</a>
-    <form method="post"
-          action="{% url 'remove_participation' training.pk p.id %}"
-          style="display:inline;">
-      {% csrf_token %}
-      <button type="submit"
-              onclick="return confirm('Remove this trainer from the training?')">
-        Remove
-      </button>
-    </form>
-  </li>
-{% empty %}
-  <li>No trainers yet.</li>
-{% endfor %}
-</ul>
+        <input type="text" id="trainer-search" placeholder="Type 2+ chars (name or SYSPER ID)..." autocomplete="off">
+        <ul id="trainer-results" class="results"></ul>
+      </div>
 
+      <div style="height:12px;"></div>
 
+      <div style="padding:12px; border:1px solid var(--border); border-radius:14px; background: var(--card);">
+        <div style="font-weight:700; margin-bottom:6px;">Suggested trainers</div>
+        <div class="help" style="margin:0 0 10px;">Have required skill and are not booked at the same time.</div>
 
-<p>
-<a href="/trainings/">← Back to trainings</a>
-</p>
+        {% if not training.subject %}
+          <div style="color:var(--muted);">This training has no subject set, so suggestions can’t be calculated.</div>
+        {% else %}
+          <form method="post" action="{% url 'add_trainers_bulk' training.pk %}">
+            {% csrf_token %}
+            {{ bulk_trainers_form.as_p }}
+            <button class="btn" type="submit">Add selected trainers</button>
+          </form>
+        {% endif %}
+      </div>
 
+      <div style="height:12px;"></div>
 
-<script>
-  function debounce(fn, ms) {
-    let t;
-    return (...args) => {
-      clearTimeout(t);
-      t = setTimeout(() => fn(...args), ms);
-    };
-  }
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        {% for p in trainers %}
+          <div class="rowline">
+            <div class="rowleft">
+              <div class="rowtitle">{{ p.person.last_name }} {{ p.person.first_name }}</div>
+              <div class="rowsub">SYSPER ID: {{ p.person.sysper_id }}</div>
+            </div>
 
-  async function fetchPeople(role, q) {
-    const url = "{% url 'people_search' training.pk %}" + `?role=${encodeURIComponent(role)}&q=${encodeURIComponent(q)}`;
-    const res = await fetch(url, { headers: { "Accept": "application/json" } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.results || [];
-  }
+            <div class="rowactions">
+              <a class="btn secondary small" href="{% url 'person_history' p.person.id %}">History</a>
 
-  function renderResults(ul, results, onPick) {
-    ul.innerHTML = "";
-    results.forEach(r => {
-      const li = document.createElement("li");
-      li.style.cursor = "pointer";
-      li.textContent = r.label;
-      li.addEventListener("click", () => onPick(r.sysper_id));
-      ul.appendChild(li);
-    });
-  }
+              <form method="post" action="{% url 'remove_participation' training.pk p.id %}" class="inlineform">
+                {% csrf_token %}
+                <button class="btn danger small" type="submit"
+                        onclick="return confirm('Remove this trainer from the training?')">
+                  Remove
+                </button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <div style="color:var(--muted);">No trainers yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
 
-  const traineeSearch = document.getElementById("trainee-search");
-  const traineeResults = document.getElementById("trainee-results");
-  const traineeSysper = document.getElementById("trainee-sysper-id");
-  const traineeForm = document.getElementById("add-trainee-form");
+  <script>
+    function debounce(fn, ms) {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    }
 
-  const trainerSearch = document.getElementById("trainer-search");
-  const trainerResults = document.getElementById("trainer-results");
-  const trainerSysper = document.getElementById("trainer-sysper-id");
-  const trainerForm = document.getElementById("add-trainer-form");
+    async function fetchPeople(role, q) {
+      const url = "{% url 'people_search' training.pk %}" + `?role=${encodeURIComponent(role)}&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.results || [];
+    }
 
-  if (traineeSearch) {
-    traineeSearch.addEventListener("input", debounce(async () => {
-      const q = traineeSearch.value.trim();
-      if (q.length < 2) { traineeResults.innerHTML = ""; return; }
-      const results = await fetchPeople("TRAINEE", q);
-      renderResults(traineeResults, results, (sysperId) => {
-        traineeSysper.value = sysperId;
-        traineeForm.submit();
+    function renderResults(ul, results, onPick) {
+      ul.innerHTML = "";
+      results.forEach(r => {
+        const li = document.createElement("li");
+        li.className = "result-item";
+        li.textContent = r.label;
+        li.addEventListener("click", () => onPick(r.sysper_id));
+        ul.appendChild(li);
       });
-    }, 250));
-  }
+    }
 
-  if (trainerSearch) {
-    trainerSearch.addEventListener("input", debounce(async () => {
-      const q = trainerSearch.value.trim();
-      if (q.length < 2) { trainerResults.innerHTML = ""; return; }
-      const results = await fetchPeople("TRAINER", q);
-      renderResults(trainerResults, results, (sysperId) => {
-        trainerSysper.value = sysperId;
-        trainerForm.submit();
-      });
-    }, 250));
-  }
-</script>
+    const traineeSearch = document.getElementById("trainee-search");
+    const traineeResults = document.getElementById("trainee-results");
+    const traineeSysper = document.getElementById("trainee-sysper-id");
+    const traineeForm = document.getElementById("add-trainee-form");
 
+    const trainerSearch = document.getElementById("trainer-search");
+    const trainerResults = document.getElementById("trainer-results");
+    const trainerSysper = document.getElementById("trainer-sysper-id");
+    const trainerForm = document.getElementById("add-trainer-form");
 
-</body>
-</html>
+    if (traineeSearch) {
+      traineeSearch.addEventListener("input", debounce(async () => {
+        const q = traineeSearch.value.trim();
+        if (q.length < 2) { traineeResults.innerHTML = ""; return; }
+        const results = await fetchPeople("TRAINEE", q);
+        renderResults(traineeResults, results, (sysperId) => {
+          traineeSysper.value = sysperId;
+          traineeForm.submit();
+        });
+      }, 250));
+    }
+
+    if (trainerSearch) {
+      trainerSearch.addEventListener("input", debounce(async () => {
+        const q = trainerSearch.value.trim();
+        if (q.length < 2) { trainerResults.innerHTML = ""; return; }
+        const results = await fetchPeople("TRAINER", q);
+        renderResults(trainerResults, results, (sysperId) => {
+          trainerSysper.value = sysperId;
+          trainerForm.submit();
+        });
+      }, 250));
+    }
+  </script>
+
+{% endblock %}

@@ -22,13 +22,14 @@ from psycopg.types.range import Range
 from .forms import TrainingForm
 from django.views.decorators.http import require_GET
 from training.constants import SYSPER_LABEL
-from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from .forms import AddMultipleTrainersForm
 from django.db.models import Prefetch
 from django.utils.timezone import now
 from django.core.paginator import Paginator
 from django.utils.http import urlencode
+
+
 
 
 
@@ -352,10 +353,18 @@ def add_trainer_skill(request, pk):
     return redirect("trainer_detail", pk=pk)
 
 
+@require_POST
 def remove_trainer_skill(request, pk, subject_id):
     trainer = get_object_or_404(Person, pk=pk)
-    TrainerSkill.objects.filter(trainer=trainer, subject_id=subject_id).delete()
-    return redirect("trainer_detail", pk=pk)
+    subject = get_object_or_404(Subject, pk=subject_id)
+
+    deleted, _ = TrainerSkill.objects.filter(trainer=trainer, subject=subject).delete()
+    if deleted:
+        messages.success(request, f"Removed skill: {subject.name}")
+    else:
+        messages.info(request, "Skill not found (nothing removed).")
+
+    return redirect("trainer_detail", pk=trainer.pk)
 
 
 def reports_home(request):

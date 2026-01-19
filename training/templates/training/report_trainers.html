@@ -1,34 +1,102 @@
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Trainer days</title></head>
-<body>
-<h1>Trainer days per month</h1>
+{% extends "training/base.html" %}
+{% block title %}Trainer days{% endblock %}
 
-<form method="get">
-  <label>Year: <input type="number" name="year" value="{{ year }}"></label>
-  <label>Month: <input type="number" name="month" value="{{ month }}" min="1" max="12"></label>
-  <button type="submit">Run</button>
-</form>
+{% block content %}
+  <style>
+    .table-wrap{ overflow:auto; border:1px solid var(--border); border-radius: 14px; }
+    table.pretty{ width:100%; border-collapse: collapse; min-width: 620px; }
+    table.pretty thead th{
+      text-align:left;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 700;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: #eef2f7;
+    }
+    table.pretty tbody td{
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      vertical-align: top;
+      font-size: 14px;
+    }
+    table.pretty tbody tr:last-child td{ border-bottom: none; }
+    .pill{
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      font-size: 12px;
+      font-weight: 700;
+    }
+  </style>
 
-<p>
-  <a href="{% url 'report_trainers_export' %}?year={{ year }}&month={{ month }}">Export CSV</a>
-</p>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">Trainer days per month</h1>
+        <p class="help" style="margin:0;">Run the report for a given month and export it to CSV.</p>
+      </div>
 
-<table border="1" cellpadding="6" cellspacing="0">
-  <tr>
-    <th>SYSPER ID</th><th>Name</th><th>Total days</th>
-  </tr>
-  {% for r in rows %}
-    <tr>
-      <td>{{ r.person__sysper_id }}</td>
-      <td>{{ r.person__last_name }} {{ r.person__first_name }}</td>
-      <td>{{ r.total_days|default_if_none:"0" }}</td>
-    </tr>
-  {% empty %}
-    <tr><td colspan="3">No trainer records for this month.</td></tr>
-  {% endfor %}
-</table>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'reports_home' %}">Back to reports</a>
+        <a class="btn secondary" href="{% url 'calendar' %}">Calendar</a>
+      </div>
+    </div>
 
-<p><a href="{% url 'reports_home' %}">← Back to reports</a></p>
-</body>
-</html>
+    <form method="get" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+      <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div class="form-row" style="max-width:160px;">
+          <label for="year">Year</label>
+          <input id="year" type="number" name="year" value="{{ year }}">
+        </div>
+
+        <div class="form-row" style="max-width:160px;">
+          <label for="month">Month</label>
+          <input id="month" type="number" name="month" value="{{ month }}" min="1" max="12">
+        </div>
+
+        <button class="btn" type="submit">Run</button>
+
+        <a class="btn secondary"
+           href="{% url 'report_trainers_export' %}?year={{ year }}&month={{ month }}">
+          Export CSV
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+      <div style="font-weight:800;">Results</div>
+      <div class="pill">{{ year }}-{{ month|stringformat:"02d" }}</div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="pretty">
+        <thead>
+          <tr>
+            <th>SYSPER ID</th>
+            <th>Name</th>
+            <th>Total days</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>{{ r.person__sysper_id }}</td>
+              <td><strong>{{ r.person__last_name }} {{ r.person__first_name }}</strong></td>
+              <td>{{ r.total_days|default_if_none:"0" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" style="color:var(--muted);">No trainer records for this month.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

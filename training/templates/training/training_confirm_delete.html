@@ -1,26 +1,41 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Delete training</title>
-</head>
-<body>
+{% extends "training/base.html" %}
+{% block title %}Delete training{% endblock %}
 
-<h1>Delete training</h1>
-<p>Are you sure you want to delete:</p>
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">Delete training</h1>
+        <p class="help" style="margin:0;">This action cannot be undone.</p>
+      </div>
 
-<p>
-  <strong>{{ training.course_name }}</strong><br>
-  {{ training.start_at }} → {{ training.end_at }}<br>
-  {{ training.location }}
-</p>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'training_detail' training.pk %}">Back</a>
+        <a class="btn secondary" href="{% url 'training_list' %}">Trainings</a>
+      </div>
+    </div>
+  </div>
 
-<form method="post">
-  {% csrf_token %}
-  <button type="submit">Yes, delete</button>
-</form>
+  <div style="height:14px;"></div>
 
-<p><a href="{% url 'training_detail' training.pk %}">Cancel</a></p>
+  <div class="card">
+    <div style="padding:14px; border:1px solid var(--border); border-radius:14px; background: var(--input-bg);">
+      <div style="font-weight:800; margin-bottom:6px;">{{ training.course_name }}</div>
+      <div style="color:var(--muted); font-size:14px;">
+        <div><strong>When:</strong> {{ training.start_at }} → {{ training.end_at }}</div>
+        <div><strong>Where:</strong> {{ training.location }}</div>
+      </div>
+    </div>
 
-</body>
-</html>
+    <div style="height:12px;"></div>
+
+    <form method="post" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      {% csrf_token %}
+      <button class="btn danger" type="submit"
+              onclick="return confirm('Really delete this training?')">
+        Yes, delete
+      </button>
+      <a class="btn secondary" href="{% url 'training_detail' training.pk %}">Cancel</a>
+    </form>
+  </div>
+{% endblock %}

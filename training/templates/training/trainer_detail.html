@@ -1,54 +1,175 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Trainer {{ trainer }}</title>
-</head>
-<body>
+{% extends "training/base.html" %}
+{% block title %}Trainer {{ trainer.last_name }} {{ trainer.first_name }}{% endblock %}
 
-<h1>{{ trainer.last_name }} {{ trainer.first_name }} ({{ trainer.sysper_id }})</h1>
-<p>Email: {{ trainer.email }}</p>
-<p>Category: {{ trainer.category }} | Deployment: {{ trainer.current_deployment }}</p>
+{% block content %}
+  <style>
+    .pill{
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .rowline{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background: var(--input-bg);
+    }
+    .rowleft{
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    .rowtitle{
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 640px;
+    }
+    .rowsub{
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .rowactions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .inlineform{ display:inline; margin:0; }
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+    }
+    @media (max-width: 920px){
+      .grid2{ grid-template-columns: 1fr; }
+      .rowtitle{ max-width: 100%; }
+    }
+  </style>
 
-<p><a href="{% url 'trainer_list' %}">← Back to trainer list</a></p>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        {% if messages %}
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+            {% for message in messages %}
+              <div style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background: var(--card); margin-bottom:10px;">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
 
-<h2>Skills (Subjects)</h2>
-<ul>
-  {% for s in skills %}
-    <li>
-      {{ s.subject.name }}
-      <a href="{% url 'remove_trainer_skill' trainer.pk s.subject.pk %}">Remove</a>
-    </li>
-  {% empty %}
-    <li>No skills yet.</li>
-  {% endfor %}
-</ul>
+        <h1 style="margin:0 0 6px;">
+          {{ trainer.last_name }} {{ trainer.first_name }}
+        </h1>
+        <p class="help" style="margin:0;">
+          <span class="pill">SYSPER ID: {{ trainer.sysper_id }}</span>
+          {% if trainer.category %}<span class="pill" style="margin-left:8px;">{{ trainer.category }}</span>{% endif %}
+          {% if trainer.current_deployment %}<span class="pill" style="margin-left:8px;">{{ trainer.current_deployment }}</span>{% endif %}
+          <br>
+          {% if trainer.email %}<strong>Email:</strong> {{ trainer.email }}{% else %}<span style="color:var(--muted);">No email on file.</span>{% endif %}
+        </p>
+      </div>
 
-<h3>Add skill</h3>
-<form method="post" action="{% url 'add_trainer_skill' trainer.pk %}">
-  {% csrf_token %}
-  <select name="subject_id" required>
-    <option value="">-- select subject --</option>
-    {% for subj in all_subjects %}
-      <option value="{{ subj.id }}">{{ subj.name }}</option>
-    {% endfor %}
-  </select>
-  <button type="submit">Add</button>
-</form>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'trainer_list' %}">Back to trainers</a>
+        <a class="btn secondary" href="{% url 'people_list' %}">People</a>
+        <a class="btn secondary" href="{% url 'calendar' %}">Calendar</a>
+      </div>
+    </div>
+  </div>
 
-<h2>Recent trainings taught</h2>
-<ul>
-  {% for p in trainings_as_trainer %}
-    <li>
-      <a href="{% url 'training_detail' p.training.pk %}">
-        {{ p.training.course_name }}
-      </a>
-      ({{ p.training.start_at }} → {{ p.training.end_at }})
-    </li>
-  {% empty %}
-    <li>No trainer assignments yet.</li>
-  {% endfor %}
-</ul>
+  <div style="height:14px;"></div>
 
-</body>
-</html>
+  <div class="grid2">
+    <!-- Skills -->
+    <div class="card">
+      <h2 style="margin:0 0 10px;">Skills</h2>
+      <p class="help" style="margin:0 0 12px;">Subjects this trainer is qualified to teach.</p>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        {% for s in skills %}
+          <div class="rowline">
+            <div class="rowleft">
+              <div class="rowtitle">{{ s.subject.name }}</div>
+              <div class="rowsub">Skill entry</div>
+            </div>
+
+            <div class="rowactions">
+              <form method="post" action="{% url 'remove_trainer_skill' trainer.pk s.subject.pk %}" class="inlineform">
+              {% csrf_token %}
+              <button class="btn danger small" type="submit"
+                      onclick="return confirm('Remove this skill from the trainer?')">
+                Remove
+              </button>
+            </form>
+
+            </div>
+          </div>
+        {% empty %}
+          <div style="color:var(--muted);">No skills yet.</div>
+        {% endfor %}
+      </div>
+
+      <div style="height:12px;"></div>
+
+      <div style="padding:12px; border:1px solid var(--border); border-radius:14px; background: var(--card);">
+        <div style="font-weight:800; margin-bottom:6px;">Add skill</div>
+
+        <form method="post" action="{% url 'add_trainer_skill' trainer.pk %}" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+          {% csrf_token %}
+          <div class="form-row" style="min-width:240px; flex:1;">
+            <label for="subject_id">Subject</label>
+            <select id="subject_id" name="subject_id" required>
+              <option value="">-- select subject --</option>
+              {% for subj in all_subjects %}
+                <option value="{{ subj.id }}">{{ subj.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn" type="submit">Add</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Recent trainings -->
+    <div class="card">
+      <h2 style="margin:0 0 10px;">Recent trainings taught</h2>
+      <p class="help" style="margin:0 0 12px;">Latest assignments where this person was added as a trainer.</p>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        {% for p in trainings_as_trainer %}
+          <div class="rowline">
+            <div class="rowleft">
+              <div class="rowtitle">
+                <a href="{% url 'training_detail' p.training.pk %}">{{ p.training.course_name }}</a>
+              </div>
+              <div class="rowsub">
+                {{ p.training.start_at }} → {{ p.training.end_at }}
+                {% if p.training.location %} • {{ p.training.location }}{% endif %}
+              </div>
+            </div>
+
+            <div class="rowactions">
+              <a class="btn secondary small" href="{% url 'training_detail' p.training.pk %}">Open</a>
+            </div>
+          </div>
+        {% empty %}
+          <div style="color:var(--muted);">No trainer assignments yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+{% endblock %}

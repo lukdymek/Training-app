@@ -1,30 +1,94 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Trainings</title>
-</head>
-<body>
-<h1>Trainings</h1>
+{% extends "training/base.html" %}
+{% block title %}Trainings{% endblock %}
 
-<p><a href="/admin/training/training/add/">Add training (admin)</a></p>
+{% block content %}
+  <style>
+    .train-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:12px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background: var(--input-bg);
+    }
+    .train-left{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+    }
+    .train-title{
+      font-weight:800;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 720px;
+    }
+    .train-meta{
+      color: var(--muted);
+      font-size: 13px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .pill{
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    @media (max-width: 820px){
+      .train-title{ max-width: 100%; }
+    }
+  </style>
 
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">Trainings</h1>
+        <p class="help" style="margin:0;">Open a training to manage trainees and trainers, or create a new one.</p>
+      </div>
 
-<ul>
-{% for t in trainings %}
-  <li>
-    <a href="{% url 'training_detail' t.pk %}">
-    <strong>{{ t.course_name }}</strong>
-</a>
-    
-    <br>
-    {{ t.start_at }} → {{ t.end_at }}<br>
-    {{ t.location }} | Capacity: {{ t.capacity }}
-  </li>
-{% empty %}
-  <li>No trainings yet.</li>
-{% endfor %}
-</ul>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'calendar' %}">Calendar</a>
+        <a class="btn" href="{% url 'training_create' %}">Add training</a>
+        <a class="btn secondary" href="/admin/training/training/add/">Add in admin</a>
+      </div>
+    </div>
+  </div>
 
-</body>
-</html>
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      {% for t in trainings %}
+        <div class="train-row">
+          <div class="train-left">
+            <div class="train-title">
+              <a href="{% url 'training_detail' t.pk %}">{{ t.course_name }}</a>
+            </div>
+
+            <div class="train-meta">
+              <span><strong>When:</strong> {{ t.start_at }} → {{ t.end_at }}</span>
+              <span><strong>Where:</strong> {{ t.location }}</span>
+              <span class="pill">Capacity: {{ t.capacity }}</span>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+            <a class="btn secondary small" href="{% url 'training_detail' t.pk %}">Open</a>
+            <a class="btn secondary small" href="{% url 'training_edit' t.pk %}">Edit</a>
+          </div>
+        </div>
+      {% empty %}
+        <div style="color:var(--muted);">No trainings yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+{% endblock %}

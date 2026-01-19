@@ -1,16 +1,20 @@
 :root{
-  --bg:#f6f7fb;
-  --card:#ffffff;
+  --bg:#eceff3;              /* darker page background */
+  --card:#f9fafb;            /* slightly off-white card */
   --text:#111827;
   --muted:#6b7280;
-  --border:#e5e7eb;
+  --border:#d1d5db;          /* stronger border */
   --primary:#2563eb;
   --primary-2:#1d4ed8;
   --danger:#dc2626;
-  --shadow: 0 10px 30px rgba(0,0,0,.06);
+
+  --shadow: 0 12px 28px rgba(0,0,0,.12); /* stronger separation */
   --radius: 14px;
+
+  --input-bg:#f3f4f6;        /* darker input background */
   --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
 }
+
 
 *{box-sizing:border-box}
 body{
@@ -30,7 +34,7 @@ a:hover{text-decoration:underline}
 }
 
 .topbar{
-  background: var(--card);
+  background: #f3f4f6;
   border-bottom: 1px solid var(--border);
 }
 
@@ -60,7 +64,7 @@ a:hover{text-decoration:underline}
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px;
+  padding: 20px;
 }
 
 .card h1, .card h2{
@@ -99,9 +103,11 @@ textarea{
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background:#fff;
+  background: var(--input-bg); /* ← changed */
   font-size: 14px;
+  color: var(--text);
 }
+
 
 textarea{min-height: 110px; resize: vertical}
 

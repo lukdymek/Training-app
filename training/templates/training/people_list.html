@@ -1,72 +1,135 @@
-<h1>People</h1>
+{% extends "training/base.html" %}
+{% block title %}People{% endblock %}
 
-<input type="text" id="people-search" value="{{ q }}" placeholder="Type 2+ characters to search..." autocomplete="off">
-<p id="people-count"></p>
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">People</h1>
+        <p class="help" style="margin:0;">Search by last name, first name, or SYSPER ID. Click a person to open their training history.</p>
+      </div>
 
-<ul id="people-results">
-  {% for person in page_obj.object_list %}
-    <li>
-      {{ person.sysper_id }} — {{ person.last_name }} {{ person.first_name }}
-      <a href="{% url 'person_history' person.id %}">History</a>
-    </li>
-  {% empty %}
-    <li>No people found.</li>
-  {% endfor %}
-</ul>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'calendar' %}">Calendar</a>
+        <a class="btn secondary" href="{% url 'training_list' %}">Trainings</a>
+      </div>
+    </div>
 
-<script>
-  function debounce(fn, ms) {
-    let t;
-    return (...args) => {
-      clearTimeout(t);
-      t = setTimeout(() => fn(...args), ms);
-    };
-  }
+    <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+      <div class="form-row" style="max-width:520px;">
+        <label for="people-search">Search</label>
+        <input
+          type="text"
+          id="people-search"
+          value="{{ q }}"
+          placeholder="Type 2+ characters to search..."
+          autocomplete="off"
+        >
+        <div id="people-count" class="small" style="color:var(--muted); margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
 
-  const input = document.getElementById("people-search");
-  const list = document.getElementById("people-results");
-  const count = document.getElementById("people-count");
+  <div style="height:14px;"></div>
 
-  const searchUrl = "{% url 'people_search_api' %}";
-  const historyBase = "/people/";  // uses your existing URL: /people/<id>/history/
+  <div class="card">
+    <ul id="people-results" style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;">
+      {% for person in page_obj.object_list %}
+        <li style="display:flex; justify-content:space-between; gap:12px; align-items:center; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--input-bg);">
+          <div>
+            <div style="font-weight:700;">
+              {{ person.last_name }} {{ person.first_name }}
+            </div>
+            <div class="small" style="color:var(--muted);">
+              SYSPER ID: {{ person.sysper_id }}
+            </div>
+          </div>
 
-  function render(results) {
-    list.innerHTML = "";
-    count.textContent = results.length ? `${results.length} match(es)` : "";
+          <div style="display:flex; gap:10px; align-items:center;">
+            <a class="btn secondary small" href="{% url 'person_history' person.id %}">History</a>
+          </div>
+        </li>
+      {% empty %}
+        <li style="color:var(--muted);">No people found.</li>
+      {% endfor %}
+    </ul>
+  </div>
 
-    if (!results.length) {
-      const li = document.createElement("li");
-      li.textContent = "No people found.";
-      list.appendChild(li);
-      return;
+  <script>
+    function debounce(fn, ms) {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
     }
 
-    for (const p of results) {
-      const li = document.createElement("li");
-      li.innerHTML = `${p.sysper_id} — ${p.last_name} ${p.first_name} `
-        + `<a href="${historyBase}${p.id}/history/">History</a>`;
-      list.appendChild(li);
+    const input = document.getElementById("people-search");
+    const list = document.getElementById("people-results");
+    const count = document.getElementById("people-count");
+
+    const searchUrl = "{% url 'people_search_api' %}";
+    const historyBase = "/people/"; // /people/<id>/history/
+
+    function render(results) {
+      list.innerHTML = "";
+      count.textContent = results.length ? `${results.length} match(es)` : "";
+
+      if (!results.length) {
+        const li = document.createElement("li");
+        li.style.color = "var(--muted)";
+        li.textContent = "No people found.";
+        list.appendChild(li);
+        return;
+      }
+
+      for (const p of results) {
+        const li = document.createElement("li");
+        li.style.display = "flex";
+        li.style.justifyContent = "space-between";
+        li.style.gap = "12px";
+        li.style.alignItems = "center";
+        li.style.padding = "10px 12px";
+        li.style.border = "1px solid var(--border)";
+        li.style.borderRadius = "12px";
+        li.style.background = "var(--input-bg)";
+
+        li.innerHTML = `
+          <div>
+            <div style="font-weight:700;">${p.last_name} ${p.first_name}</div>
+            <div class="small" style="color:var(--muted);">SYSPER ID: ${p.sysper_id}</div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <a class="btn secondary small" href="${historyBase}${p.id}/history/">History</a>
+          </div>
+        `;
+
+        list.appendChild(li);
+      }
     }
-  }
 
-  const doSearch = debounce(async () => {
-    const q = input.value.trim();
+    const doSearch = debounce(async () => {
+      const q = input.value.trim();
 
-    if (q.length < 2) {
-      // optional: clear results when less than 2 chars
-      count.textContent = "";
-      return;
-    }
+      if (q.length < 2) {
+        count.textContent = "";
+        // Optional: keep the initial server-rendered list instead of clearing it.
+        // If you want clearing behavior, uncomment the next 2 lines:
+        // list.innerHTML = "";
+        // render([]);
+        return;
+      }
 
-    const res = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`, {
-      headers: { "Accept": "application/json" }
-    });
+      const res = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`, {
+        headers: { "Accept": "application/json" }
+      });
 
-    if (!res.ok) return;
+      if (!res.ok) return;
 
-    const data = await res.json();
-    render(data.results || []);
-  }, 250);
+      const data = await res.json();
+      render(data.results || []);
+    }, 250);
 
-  input.addEventListener("input", doSearch);
-</script>
+    input.addEventListener("input", doSearch);
+  </script>
+{% endblock %}

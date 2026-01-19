@@ -1,41 +1,220 @@
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Person history</title></head>
-<body>
-<h1>Person training history</h1>
+{% extends "training/base.html" %}
+{% block title %}Person history report{% endblock %}
 
-<form method="get">
-  <input type="text" name="sysper_id" placeholder="SYSPER ID" value="{{ sysper }}">
-  <button type="submit">Search</button>
-</form>
+{% block content %}
+  <style>
+    .table-wrap{ overflow:auto; border:1px solid var(--border); border-radius: 14px; }
+    table.pretty{ width:100%; border-collapse: collapse; min-width: 860px; }
+    table.pretty thead th{
+      text-align:left;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 700;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: #eef2f7;
+    }
+    table.pretty tbody td{
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      vertical-align: top;
+      font-size: 14px;
+    }
+    table.pretty tbody tr:last-child td{ border-bottom: none; }
 
-{% if sysper and not person %}
-  <p>Person not found.</p>
-{% endif %}
+    .pill{
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      font-size: 12px;
+      font-weight: 700;
+    }
 
-{% if person %}
-  <h2>{{ person.last_name }} {{ person.first_name }} ({{ person.sysper_id }})</h2>
-  <p><a href="{% url 'report_person_export' %}?sysper_id={{ person.sysper_id }}">Export CSV</a></p>
+    .results{
+      list-style:none;
+      padding:0;
+      margin:10px 0 0;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      max-width: 520px;
+    }
+    .result-item{
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background: var(--card);
+      cursor:pointer;
+    }
+    .result-item:hover{ border-color: #9ca3af; }
+  </style>
 
-  <table border="1" cellpadding="6" cellspacing="0">
-    <tr>
-      <th>Role</th><th>Course</th><th>Subject</th><th>Start</th><th>End</th><th>Location</th>
-    </tr>
-    {% for p in rows %}
-      <tr>
-        <td>{{ p.role }}</td>
-        <td><a href="{% url 'training_detail' p.training.pk %}">{{ p.training.course_name }}</a></td>
-        <td>{% if p.training.subject %}{{ p.training.subject.name }}{% endif %}</td>
-        <td>{{ p.training.start_at }}</td>
-        <td>{{ p.training.end_at }}</td>
-        <td>{{ p.training.location }}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="6">No records.</td></tr>
-    {% endfor %}
-  </table>
-{% endif %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">Person training history</h1>
+        <p class="help" style="margin:0;">Search by name or SYSPER ID, select a person, then export to CSV.</p>
+      </div>
 
-<p><a href="{% url 'reports_home' %}">← Back to reports</a></p>
-</body>
-</html>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'reports_home' %}">Back to reports</a>
+        <a class="btn secondary" href="{% url 'people_list' %}">People</a>
+      </div>
+    </div>
+
+    <form id="person-report-form" method="get" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+      <div class="form-row" style="max-width:520px;">
+        <label for="person-search">Search person</label>
+
+        <!-- This is what the user types -->
+        <input
+          id="person-search"
+          type="text"
+          placeholder="Type 2+ chars (name or SYSPER ID)..."
+          autocomplete="off"
+        >
+
+        <!-- This is what your report view expects -->
+        <input
+          id="sysper_id"
+          type="text"
+          name="sysper_id"
+          value="{{ sysper }}"
+          style="display:none;"
+        >
+
+        <ul id="person-results" class="results"></ul>
+
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+          <button class="btn" type="submit">Run report</button>
+
+          {% if person %}
+            <a class="btn secondary" href="{% url 'report_person_export' %}?sysper_id={{ person.sysper_id }}">Export CSV</a>
+            <a class="btn secondary" href="{% url 'person_history' person.id %}">Open full history</a>
+          {% endif %}
+        </div>
+
+        <div class="help" style="margin-top:10px;">
+          Tip: If you already know it, you can paste a SYSPER ID and press “Run report”.
+        </div>
+      </div>
+    </form>
+
+    {% if sysper and not person %}
+      <div style="margin-top:14px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background: var(--card); color: var(--muted);">
+        Person not found.
+      </div>
+    {% endif %}
+  </div>
+
+  {% if person %}
+    <div style="height:14px;"></div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+        <div style="font-weight:800;">
+          {{ person.last_name }} {{ person.first_name }}
+          <span class="pill" style="margin-left:8px;">SYSPER ID: {{ person.sysper_id }}</span>
+        </div>
+        <div class="pill">Records: {{ rows|length }}</div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="pretty">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Course</th>
+              <th>Subject</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Location</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in rows %}
+              <tr>
+                <td><span class="pill">{{ p.role }}</span></td>
+                <td><a href="{% url 'training_detail' p.training.pk %}"><strong>{{ p.training.course_name }}</strong></a></td>
+                <td>{% if p.training.subject %}{{ p.training.subject.name }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+                <td>{{ p.training.start_at }}</td>
+                <td>{{ p.training.end_at }}</td>
+                <td>{{ p.training.location }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="6" style="color:var(--muted);">No records.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <script>
+    function debounce(fn, ms) {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    }
+
+    const searchUrl = "{% url 'people_search_api' %}";
+
+    const form = document.getElementById("person-report-form");
+    const searchInput = document.getElementById("person-search");
+    const sysperHidden = document.getElementById("sysper_id");
+    const resultsUl = document.getElementById("person-results");
+
+    function render(results) {
+      resultsUl.innerHTML = "";
+
+      results.forEach(p => {
+        const li = document.createElement("li");
+        li.className = "result-item";
+        li.textContent = `${p.sysper_id} — ${p.last_name} ${p.first_name}`;
+        li.addEventListener("click", () => {
+          sysperHidden.value = p.sysper_id;  // what backend expects
+          resultsUl.innerHTML = "";
+          form.submit();
+        });
+        resultsUl.appendChild(li);
+      });
+    }
+
+    async function runSearch() {
+      const q = searchInput.value.trim();
+      if (q.length < 2) {
+        resultsUl.innerHTML = "";
+        return;
+      }
+
+      const res = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`, {
+        headers: { "Accept": "application/json" }
+      });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      render(data.results || []);
+    }
+
+    searchInput.addEventListener("input", debounce(runSearch, 250));
+
+    // If user pastes a SYSPER ID and presses Enter:
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        // treat whatever is typed as a sysper id fallback
+        sysperHidden.value = searchInput.value.trim();
+      }
+    });
+
+    // If report was loaded with an existing sysper, show it in the visible box too (nice UX)
+    (function syncInitial() {
+      const initial = (sysperHidden.value || "").trim();
+      if (initial) searchInput.value = initial;
+    })();
+  </script>
+{% endblock %}

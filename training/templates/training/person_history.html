@@ -1,85 +1,165 @@
-<h1>{{ person.last_name }} {{ person.first_name }} — {{ person.sysper_id }}</h1>
+{% extends "training/base.html" %}
+{% block title %}Training history{% endblock %}
 
-<h2>Upcoming trainings</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Training</th>
-      <th>Role</th>
-      <th>Start</th>
-      <th>End</th>
-      <th>Location</th>
-      <th>Subject</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for p in upcoming %}
-      <tr>
-        <td><a href="{% url 'training_detail' p.training.id %}">{{ p.training.course_name }}</a></td>
-        <td>{{ p.role }}</td>
-        <td>{{ p.training.start_at }}</td>
-        <td>{{ p.training.end_at }}</td>
-        <td>{{ p.training.location }}</td>
-        <td>{% if p.training.subject %}{{ p.training.subject.name }}{% endif %}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="6">No upcoming trainings.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% block content %}
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">
+          {{ person.last_name }} {{ person.first_name }}
+        </h1>
+        <p class="help" style="margin:0;">
+          SYSPER ID: <strong>{{ person.sysper_id }}</strong>
+        </p>
+      </div>
 
-{% if ongoing %}
-  <h2>Ongoing trainings</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Training</th>
-        <th>Role</th>
-        <th>Start</th>
-        <th>End</th>
-        <th>Location</th>
-        <th>Subject</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in ongoing %}
-        <tr>
-          <td><a href="{% url 'training_detail' p.training.id %}">{{ p.training.course_name }}</a></td>
-          <td>{{ p.role }}</td>
-          <td>{{ p.training.start_at }}</td>
-          <td>{{ p.training.end_at }}</td>
-          <td>{{ p.training.location }}</td>
-          <td>{% if p.training.subject %}{{ p.training.subject.name }}{% endif %}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-{% endif %}
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'people_list' %}">Back to People</a>
+        <a class="btn secondary" href="{% url 'calendar' %}">Calendar</a>
+      </div>
+    </div>
+  </div>
 
-<h2>Completed trainings</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Training</th>
-      <th>Role</th>
-      <th>Start</th>
-      <th>End</th>
-      <th>Location</th>
-      <th>Subject</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for p in completed %}
-      <tr>
-        <td><a href="{% url 'training_detail' p.training.id %}">{{ p.training.course_name }}</a></td>
-        <td>{{ p.role }}</td>
-        <td>{{ p.training.start_at }}</td>
-        <td>{{ p.training.end_at }}</td>
-        <td>{{ p.training.location }}</td>
-        <td>{% if p.training.subject %}{{ p.training.subject.name }}{% endif %}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="6">No completed trainings.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+  <div style="height:14px;"></div>
+
+  <style>
+    .table-wrap{ overflow:auto; border:1px solid var(--border); border-radius: 14px; }
+    table.pretty{ width:100%; border-collapse: collapse; min-width: 820px; }
+    table.pretty thead th{
+      text-align:left;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 700;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: #eef2f7;
+    }
+    table.pretty tbody td{
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      vertical-align: top;
+      font-size: 14px;
+    }
+    table.pretty tbody tr:last-child td{ border-bottom: none; }
+    .pill{
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+  </style>
+
+  <div class="card">
+    <h2 style="margin:0 0 12px;">Upcoming trainings</h2>
+
+    <div class="table-wrap">
+      <table class="pretty">
+        <thead>
+          <tr>
+            <th>Training</th>
+            <th>Role</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Location</th>
+            <th>Subject</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in upcoming %}
+            <tr>
+              <td>
+                <a href="{% url 'training_detail' p.training.id %}"><strong>{{ p.training.course_name }}</strong></a>
+              </td>
+              <td><span class="pill">{{ p.role }}</span></td>
+              <td>{{ p.training.start_at }}</td>
+              <td>{{ p.training.end_at }}</td>
+              <td>{{ p.training.location }}</td>
+              <td>{% if p.training.subject %}{{ p.training.subject.name }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" style="color:var(--muted);">No upcoming trainings.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if ongoing %}
+    <div style="height:14px;"></div>
+
+    <div class="card">
+      <h2 style="margin:0 0 12px;">Ongoing trainings</h2>
+
+      <div class="table-wrap">
+        <table class="pretty">
+          <thead>
+            <tr>
+              <th>Training</th>
+              <th>Role</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Location</th>
+              <th>Subject</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in ongoing %}
+              <tr>
+                <td>
+                  <a href="{% url 'training_detail' p.training.id %}"><strong>{{ p.training.course_name }}</strong></a>
+                </td>
+                <td><span class="pill">{{ p.role }}</span></td>
+                <td>{{ p.training.start_at }}</td>
+                <td>{{ p.training.end_at }}</td>
+                <td>{{ p.training.location }}</td>
+                <td>{% if p.training.subject %}{{ p.training.subject.name }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <h2 style="margin:0 0 12px;">Completed trainings</h2>
+
+    <div class="table-wrap">
+      <table class="pretty">
+        <thead>
+          <tr>
+            <th>Training</th>
+            <th>Role</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Location</th>
+            <th>Subject</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in completed %}
+            <tr>
+              <td>
+                <a href="{% url 'training_detail' p.training.id %}"><strong>{{ p.training.course_name }}</strong></a>
+              </td>
+              <td><span class="pill">{{ p.role }}</span></td>
+              <td>{{ p.training.start_at }}</td>
+              <td>{{ p.training.end_at }}</td>
+              <td>{{ p.training.location }}</td>
+              <td>{% if p.training.subject %}{{ p.training.subject.name }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" style="color:var(--muted);">No completed trainings.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
