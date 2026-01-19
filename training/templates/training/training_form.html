@@ -1,33 +1,55 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>{% if mode == "edit" %}Edit training{% else %}Create training{% endif %}</title>
-</head>
-<body>
+{% extends "training/base.html" %}
+{% block title %}Create training{% endblock %}
 
-<h1>{% if mode == "edit" %}Edit training{% else %}Create training{% endif %}</h1>
+{% block content %}
+  <div class="card">
+    <h1>Create training</h1>
+    <p class="help">Fill in the details below. You can add trainees and trainers after saving.</p>
 
-{% if messages %}
-  <ul>
-    {% for message in messages %}
-      <li>{{ message }}</li>
-    {% endfor %}
-  </ul>
-{% endif %}
+    <form method="post">
+      {% csrf_token %}
 
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">{% if mode == "edit" %}Save changes{% else %}Save{% endif %}</button>
-</form>
+      <div class="form-grid">
+        <div class="form-row">
+          <label for="{{ form.course_name.id_for_label }}">Course name</label>
+          {{ form.course_name }}
+        </div>
 
-<p>
-  <a href="/calendar/">← Back to calendar</a>
-  {% if mode == "edit" %}
-    | <a href="{% url 'training_detail' training.pk %}">Back to training</a>
-  {% endif %}
-</p>
+        <div class="form-row">
+          <label for="{{ form.subject.id_for_label }}">Subject</label>
+          {{ form.subject }}
+        </div>
 
-</body>
-</html>
+        <div class="form-row">
+          <label for="{{ form.start_at.id_for_label }}">Start</label>
+          {{ form.start_at }}
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.end_at.id_for_label }}">End</label>
+          {{ form.end_at }}
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.location.id_for_label }}">Location</label>
+          {{ form.location }}
+        </div>
+
+        <div class="form-row">
+          <label for="{{ form.capacity.id_for_label }}">Capacity</label>
+          {{ form.capacity }}
+        </div>
+
+        <div class="form-row full">
+          <label for="{{ form.remarks.id_for_label }}">Remarks</label>
+          {{ form.remarks }}
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="submit">Save</button>
+        <a class="btn secondary" href="{% url 'calendar' %}">Back to calendar</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

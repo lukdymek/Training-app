@@ -1,0 +1,141 @@
+:root{
+  --bg:#f6f7fb;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#6b7280;
+  --border:#e5e7eb;
+  --primary:#2563eb;
+  --primary-2:#1d4ed8;
+  --danger:#dc2626;
+  --shadow: 0 10px 30px rgba(0,0,0,.06);
+  --radius: 14px;
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:var(--font);
+  color:var(--text);
+  background:var(--bg);
+}
+
+a{color:var(--primary); text-decoration:none}
+a:hover{text-decoration:underline}
+
+.container{
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+}
+
+.topbar{
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-inner{
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+}
+
+.brand{
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.nav a{
+  margin-left: 12px;
+  color: var(--text);
+}
+.nav a:hover{color: var(--primary); text-decoration:none}
+
+.card{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.card h1, .card h2{
+  margin: 0 0 14px;
+}
+
+.help{
+  color: var(--muted);
+  margin: 0 0 18px;
+  font-size: 14px;
+}
+
+.form-grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+.form-row{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+}
+
+label{
+  font-weight: 600;
+  font-size: 14px;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="datetime-local"],
+select,
+textarea{
+  width:100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background:#fff;
+  font-size: 14px;
+}
+
+textarea{min-height: 110px; resize: vertical}
+
+.full{grid-column: 1 / -1}
+
+.actions{
+  display:flex;
+  gap: 10px;
+  margin-top: 16px;
+  align-items:center;
+}
+
+.btn{
+  appearance:none;
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:hover{background: var(--primary-2)}
+.btn.secondary{
+  background:#fff;
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn.danger{
+  background: var(--danger);
+}
+
+.small{font-size: 13px}
+
+@media (max-width: 720px){
+  .form-grid{grid-template-columns: 1fr}
+}
