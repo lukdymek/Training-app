@@ -22,6 +22,8 @@ urlpatterns = [
     path("trainings/<int:pk>/trainer-days/<int:participation_id>/", views.update_trainer_days, name="update_trainer_days"),
     path("trainings/<int:pk>/edit/", views.training_edit, name="training_edit"),
     path("trainings/<int:pk>/delete/", views.training_delete, name="training_delete"),
+    path("trainings/<int:pk>/people-search/", views.people_search, name="people_search"),
+
 
 
 ]

@@ -21,10 +21,19 @@
 
 <h2>Add trainee</h2>
 
+<form id="add-trainee-form" method="post" action="{% url 'add_trainee' training.pk %}">
+  {% csrf_token %}
+  <input type="hidden" name="sysper_id" id="trainee-sysper-id">
+</form>
+
+<input type="text" id="trainee-search" placeholder="Search trainee by name or SYSPER ID..." autocomplete="off">
+<ul id="trainee-results"></ul>
+
+<!-- Keep your old manual input as a fallback if you want -->
 <form method="post" action="{% url 'add_trainee' training.pk %}">
   {% csrf_token %}
   <input type="text" name="sysper_id" placeholder="SYSPER ID" required>
-  <button type="submit">Add</button>
+  <button type="submit">Add by SYSPER ID</button>
 </form>
 
 {% if messages %}
@@ -47,11 +56,13 @@
 
 <h2>Add trainer</h2>
 
-<form method="post" action="{% url 'add_trainer' training.pk %}">
+<form id="add-trainer-form" method="post" action="{% url 'add_trainer' training.pk %}">
   {% csrf_token %}
-  <input type="text" name="sysper_id" placeholder="SYSPER ID" required>
-  <button type="submit">Add</button>
+  <input type="hidden" name="sysper_id" id="trainer-sysper-id">
 </form>
+
+<input type="text" id="trainer-search" placeholder="Search trainer by name or SYSPER ID..." autocomplete="off">
+<ul id="trainer-results"></ul>
 
 
 <h2>Trainers</h2>
@@ -77,6 +88,71 @@
 <p>
 <a href="/trainings/">← Back to trainings</a>
 </p>
+
+
+<script>
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  async function fetchPeople(role, q) {
+    const url = "{% url 'people_search' training.pk %}" + `?role=${encodeURIComponent(role)}&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.results || [];
+  }
+
+  function renderResults(ul, results, onPick) {
+    ul.innerHTML = "";
+    results.forEach(r => {
+      const li = document.createElement("li");
+      li.style.cursor = "pointer";
+      li.textContent = r.label;
+      li.addEventListener("click", () => onPick(r.sysper_id));
+      ul.appendChild(li);
+    });
+  }
+
+  const traineeSearch = document.getElementById("trainee-search");
+  const traineeResults = document.getElementById("trainee-results");
+  const traineeSysper = document.getElementById("trainee-sysper-id");
+  const traineeForm = document.getElementById("add-trainee-form");
+
+  const trainerSearch = document.getElementById("trainer-search");
+  const trainerResults = document.getElementById("trainer-results");
+  const trainerSysper = document.getElementById("trainer-sysper-id");
+  const trainerForm = document.getElementById("add-trainer-form");
+
+  if (traineeSearch) {
+    traineeSearch.addEventListener("input", debounce(async () => {
+      const q = traineeSearch.value.trim();
+      if (q.length < 2) { traineeResults.innerHTML = ""; return; }
+      const results = await fetchPeople("TRAINEE", q);
+      renderResults(traineeResults, results, (sysperId) => {
+        traineeSysper.value = sysperId;
+        traineeForm.submit();
+      });
+    }, 250));
+  }
+
+  if (trainerSearch) {
+    trainerSearch.addEventListener("input", debounce(async () => {
+      const q = trainerSearch.value.trim();
+      if (q.length < 2) { trainerResults.innerHTML = ""; return; }
+      const results = await fetchPeople("TRAINER", q);
+      renderResults(trainerResults, results, (sysperId) => {
+        trainerSysper.value = sysperId;
+        trainerForm.submit();
+      });
+    }, 250));
+  }
+</script>
+
 
 </body>
 </html>

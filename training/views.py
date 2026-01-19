@@ -23,6 +23,8 @@ from django.conf import settings
 from django.db import transaction, IntegrityError
 from psycopg.types.range import Range
 from .forms import TrainingForm
+from django.views.decorators.http import require_GET
+from training.constants import SYSPER_LABEL
 
 
 def training_list(request):
@@ -59,7 +61,7 @@ def add_trainee(request, pk):
         sysper_id = request.POST.get("sysper_id", "").strip()
 
         if not sysper_id.isdigit():
-            messages.error(request, f"Invalid {settings.SYSPER_LABEL}.")
+            messages.error(request, f"Invalid {SYSPER_LABEL}.")
             return redirect("training_detail", pk=pk)
 
         try:
@@ -106,7 +108,7 @@ def add_trainer(request, pk):
         sysper_id = request.POST.get("sysper_id", "").strip()
 
         if not sysper_id.isdigit():
-            messages.error(request, f"Invalid {settings.SYSPER_LABEL}.")
+            messages.error(request, f"Invalid {SYSPER_LABEL}.")
             return redirect("training_detail", pk=pk)
 
         try:
@@ -364,7 +366,7 @@ def report_person_export(request):
     resp["Content-Disposition"] = f'attachment; filename="person_{person.sysper_id}_history.csv"'
     w = csv.writer(resp)
 
-    w.writerow([settings.SYSPER_LABEL, "Last name", "First name", "Role", "Course", "Subject", "Start", "End", "Location"])
+    w.writerow([SYSPER_LABEL, "Last name", "First name", "Role", "Course", "Subject", "Start", "End", "Location"])
     for p in rows:
         t = p.training
         w.writerow([
@@ -435,7 +437,7 @@ def report_trainers_export(request):
     resp = HttpResponse(content_type="text/csv")
     resp["Content-Disposition"] = f'attachment; filename="trainer_days_{y:04d}_{m:02d}.csv"'
     w = csv.writer(resp)
-    w.writerow([settings.SYSPER_LABEL, "Last name", "First name", "Total trainer days (month)"])
+    w.writerow([SYSPER_LABEL, "Last name", "First name", "Total trainer days (month)"])
 
     for r in qs:
         w.writerow([
@@ -481,3 +483,56 @@ def update_trainer_days(request, pk, participation_id):
     p.save(update_fields=["days"])
     messages.success(request, f"Days updated for {p.person}: {days}")
     return redirect("training_detail", pk=pk)
+
+@require_GET
+def people_search(request, pk):
+    training = get_object_or_404(Training, pk=pk)
+
+    role = request.GET.get("role", "TRAINEE").upper().strip()
+    q = request.GET.get("q", "").strip()
+
+    if role not in {"TRAINEE", "TRAINER"}:
+        return JsonResponse({"results": []})
+
+    # keep it efficient
+    if len(q) < 2:
+        return JsonResponse({"results": []})
+
+    people = Person.objects.all()
+
+    # search by name + (optionally) sysper prefix
+    if q.isdigit():
+        people = people.filter(
+            Q(sysper_id__startswith=int(q)) |
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q)
+        )
+    else:
+        people = people.filter(
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q)
+        )
+
+    # exclude already added for this role
+    existing_person_ids = Participation.objects.filter(
+        training=training, role=role
+    ).values_list("person_id", flat=True)
+    people = people.exclude(id__in=existing_person_ids)
+
+    # if adding TRAINER and training has subject -> only show approved trainers
+    if role == "TRAINER" and training.subject_id:
+        people = people.filter(trainerskill__subject=training.subject).distinct()
+
+    people = people.order_by("last_name", "first_name")[:20]
+
+    return JsonResponse({
+        "results": [
+            {
+                "sysper_id": p.sysper_id,
+                "first_name": p.first_name,
+                "last_name": p.last_name,
+                "label": f"{p.last_name} {p.first_name} ({p.sysper_id})",
+            }
+            for p in people
+        ]
+    })
