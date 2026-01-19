@@ -25,6 +25,8 @@ from psycopg.types.range import Range
 from .forms import TrainingForm
 from django.views.decorators.http import require_GET
 from training.constants import SYSPER_LABEL
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect
 
 
 def training_list(request):
@@ -536,3 +538,39 @@ def people_search(request, pk):
             for p in people
         ]
     })
+
+
+@require_POST
+def remove_trainee(request, pk, person_id):
+    training = get_object_or_404(Training, pk=pk)
+    Participation.objects.filter(
+        training=training,
+        person_id=person_id,
+        role="TRAINEE",
+    ).delete()
+    messages.success(request, "Trainee removed from training.")
+    return redirect("training_detail", pk=pk)
+
+@require_POST
+def remove_trainer(request, pk, person_id):
+    training = get_object_or_404(Training, pk=pk)
+    Participation.objects.filter(
+        training=training,
+        person_id=person_id,
+        role="TRAINER",
+    ).delete()
+    messages.success(request, "Trainer removed from training.")
+    return redirect("training_detail", pk=pk)
+
+
+@require_POST
+def remove_participation(request, pk, participation_id):
+    training = get_object_or_404(Training, pk=pk)
+    participation = get_object_or_404(
+        Participation,
+        pk=participation_id,
+        training=training,
+    )
+    participation.delete()
+    messages.success(request, "Removed from training.")
+    return redirect("training_detail", pk=pk)

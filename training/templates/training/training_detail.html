@@ -47,11 +47,23 @@
 <h2>Trainees</h2>
 <ul>
 {% for p in trainees %}
-  <li> {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}</li>
+  <li>
+    {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}
+    <form method="post"
+          action="{% url 'remove_participation' training.pk p.id %}"
+          style="display:inline;">
+      {% csrf_token %}
+      <button type="submit"
+              onclick="return confirm('Remove this person from the training?')">
+        Remove
+      </button>
+    </form>
+  </li>
 {% empty %}
   <li>No trainees yet.</li>
 {% endfor %}
 </ul>
+
 
 
 <h2>Add trainer</h2>
@@ -66,23 +78,25 @@
 
 
 <h2>Trainers</h2>
-
 <ul>
 {% for p in trainers %}
   <li>
     {{ p.person.sysper_id }} — {{ p.person.last_name }} {{ p.person.first_name }}
-
-    <form method="post" action="{% url 'update_trainer_days' training.pk p.pk %}" style="display:inline; margin-left:12px;">
+    <form method="post"
+          action="{% url 'remove_participation' training.pk p.id %}"
+          style="display:inline;">
       {% csrf_token %}
-      <label style="margin-right:6px;">Days:</label>
-      <input type="text" name="days" value="{{ p.days|default_if_none:'' }}" style="width:70px;">
-      <button type="submit">Save</button>
+      <button type="submit"
+              onclick="return confirm('Remove this trainer from the training?')">
+        Remove
+      </button>
     </form>
   </li>
 {% empty %}
   <li>No trainers yet.</li>
 {% endfor %}
 </ul>
+
 
 
 <p>
