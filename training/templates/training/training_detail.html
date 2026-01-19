@@ -76,6 +76,17 @@
 <input type="text" id="trainer-search" placeholder="Search trainer by name or SYSPER ID..." autocomplete="off">
 <ul id="trainer-results"></ul>
 
+<h3>Available trainers (have required skill + not booked)</h3>
+
+{% if not training.subject %}
+  <p>This training has no subject set, so available trainers can’t be suggested.</p>
+{% else %}
+  <form method="post" action="{% url 'add_trainers_bulk' training.pk %}">
+    {% csrf_token %}
+    {{ bulk_trainers_form.as_p }}
+    <button type="submit">Add selected trainers</button>
+  </form>
+{% endif %}
 
 <h2>Trainers</h2>
 <ul>

@@ -1,17 +1,14 @@
-
 from django.shortcuts import render, get_object_or_404
-from .models import Training, Participation
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.utils.timezone import localtime
-from .models import Training
 from django.utils.dateparse import parse_datetime
 from .forms import TrainingForm
 from django.db.models import Count, Q
 from django.utils.timezone import localtime
-from .models import Person, TrainerSkill, Subject, Participation
+from .models import Person, TrainerSkill, Subject, Participation, Training
 import csv
 from django.http import HttpResponse
 from django.db.models import Sum, Q
@@ -27,6 +24,7 @@ from django.views.decorators.http import require_GET
 from training.constants import SYSPER_LABEL
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
+from .forms import AddMultipleTrainersForm
 
 
 def training_list(request):
@@ -45,15 +43,44 @@ def training_detail(request, pk):
         training=training, role="TRAINER"
     ).select_related("person")
 
-    return render(
-        request,
-        "training/training_detail.html",
-        {
-            "training": training,
-            "trainees": trainees,
-            "trainers": trainers,
-        },
-    )
+    start = training.start_at
+    end = training.end_at
+
+    # Build "available trainers" list
+    if training.subject_id:
+        available_trainers = Person.objects.filter(
+            trainerskill__subject=training.subject
+        ).distinct()
+    else:
+        available_trainers = Person.objects.none()
+
+    # exclude trainers already in this training
+    existing_trainers = Participation.objects.filter(
+        training=training, role="TRAINER"
+    ).values_list("person_id", flat=True)
+
+    available_trainers = available_trainers.exclude(id__in=existing_trainers)
+
+    # exclude anyone busy in overlapping training (any role)
+    conflicting_people = Participation.objects.filter(
+        training__start_at__lt=end,
+        training__end_at__gt=start,
+    ).values_list("person_id", flat=True).distinct()
+
+    available_trainers = available_trainers.exclude(id__in=conflicting_people)
+
+    bulk_trainers_form = AddMultipleTrainersForm(queryset=available_trainers)
+
+    context = {
+        "training": training,
+        "trainees": trainees,
+        "trainers": trainers,
+        "available_trainers": available_trainers,
+        "bulk_trainers_form": bulk_trainers_form,
+    }
+
+    return render(request, "training/training_detail.html", context)
+
 
 
 def add_trainee(request, pk):
@@ -574,3 +601,58 @@ def remove_participation(request, pk, participation_id):
     participation.delete()
     messages.success(request, "Removed from training.")
     return redirect("training_detail", pk=pk)
+
+
+@require_POST
+def add_trainers_bulk(request, pk):
+    training = get_object_or_404(Training, pk=pk)
+
+    # Build the same available queryset used on the page (see section 3)
+    start = training.start_at
+    end = training.end_at
+
+    available_qs = Person.objects.all()
+
+    if training.subject_id:
+        available_qs = available_qs.filter(trainerskill__subject=training.subject).distinct()
+    else:
+        available_qs = available_qs.none()
+
+    # exclude people already in this training as TRAINER
+    existing_trainers = Participation.objects.filter(training=training, role="TRAINER").values_list("person_id", flat=True)
+    available_qs = available_qs.exclude(id__in=existing_trainers)
+
+    # exclude people who are participating in ANY training that overlaps
+    conflicting_people = Participation.objects.filter(
+        training__start_at__lt=end,
+        training__end_at__gt=start,
+    ).values_list("person_id", flat=True).distinct()
+
+    available_qs = available_qs.exclude(id__in=conflicting_people)
+
+    form = AddMultipleTrainersForm(request.POST, queryset=available_qs)
+
+    if not form.is_valid():
+        messages.error(request, "Please select trainers from the available list.")
+        return redirect("training_detail", pk=pk)
+
+    selected = list(form.cleaned_data["trainers"])
+    added = 0
+    skipped = 0
+
+    for person in selected:
+        try:
+            Participation.objects.create(training=training, person=person, role="TRAINER")
+            added += 1
+        except IntegrityError:
+            # already exists or overlaps constraint hit
+            skipped += 1
+
+    if added:
+        messages.success(request, f"Added {added} trainer(s).")
+    if skipped:
+        messages.warning(request, f"Skipped {skipped} trainer(s) (already added or conflicting).")
+
+    return redirect("training_detail", pk=pk)
+
+

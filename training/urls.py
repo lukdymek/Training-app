@@ -26,6 +26,7 @@ urlpatterns = [
     path("trainings/<int:pk>/trainees/<int:person_id>/remove/", views.remove_trainee, name="remove_trainee"),
     path("trainings/<int:pk>/trainers/<int:person_id>/remove/", views.remove_trainer, name="remove_trainer"),
     path("trainings/<int:pk>/participation/<int:participation_id>/remove/", views.remove_participation, name="remove_participation"),
+    path("trainings/<int:pk>/trainers/bulk-add/", views.add_trainers_bulk, name="add_trainers_bulk"),
     
 
 

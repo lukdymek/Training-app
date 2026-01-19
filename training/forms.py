@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 from psycopg.types.range import Range
 from .models import Training, Participation
+from .models import Person
 
 
 class TrainingForm(forms.ModelForm):
@@ -64,3 +65,16 @@ class TrainingForm(forms.ModelForm):
                     f"{current_trainees} trainees assigned."
                 )
         return cleaned
+    
+class AddMultipleTrainersForm(forms.Form):
+        trainers = forms.ModelMultipleChoiceField(
+            queryset=Person.objects.none(),
+            required=False,
+            widget=forms.CheckboxSelectMultiple,
+            label="Available trainers",
+        )
+
+        def __init__(self, *args, queryset=None, **kwargs):
+            super().__init__(*args, **kwargs)
+            if queryset is not None:
+                self.fields["trainers"].queryset = queryset
