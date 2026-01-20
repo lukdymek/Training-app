@@ -849,7 +849,7 @@ def recurring_training(request):
     """
     Page with dropdowns (subject + filter) and a dynamic list loaded via API.
     """
-    subjects = Subject.objects.order_by("name")
+    subjects = Subject.objects.filter(is_recurring=True).order_by("name")
     return render(request, "training/recurring_training.html", {"subjects": subjects})
 
 
@@ -869,7 +869,6 @@ def recurring_training_api(request):
     """
     subject_id = request.GET.get("subject_id")
     window = (request.GET.get("window") or "all").strip().lower()
-    validity_days = int(request.GET.get("validity_days") or 365)
 
     if not subject_id:
         return JsonResponse({"results": [], "error": "subject_id is required"}, status=400)
@@ -879,6 +878,11 @@ def recurring_training_api(request):
     except ValueError:
         return JsonResponse({"results": [], "error": "subject_id must be an integer"}, status=400)
 
+    subject = Subject.objects.filter(id=subject_id, is_recurring=True).first()
+    if not subject:
+        return JsonResponse({"results": [], "error": "Subject not found or not recurring"}, status=404)
+
+    validity_days = subject.validity_days
     today = timezone.localdate()
 
     # One row per person: find their latest completion for that subject
@@ -948,5 +952,6 @@ def recurring_training_api(request):
             "today": today.isoformat(),
             "validity_days": validity_days,
             "window": window,
+            "subject": subject.name,
         }
     })

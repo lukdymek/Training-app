@@ -28,8 +28,12 @@ class Person(models.Model):
 class Subject(models.Model):
     name = models.CharField(max_length=120, unique=True)
 
+    is_recurring = models.BooleanField(default=False)
+    validity_days = models.PositiveIntegerField(default=365)
+
     def __str__(self):
         return self.name
+
 
 
 class TrainerSkill(models.Model):

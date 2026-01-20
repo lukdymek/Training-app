@@ -19,6 +19,8 @@ import tempfile
 
 @admin.register(Subject)
 class SubjectAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_recurring", "validity_days")
+    list_editable = ("is_recurring", "validity_days")
     search_fields = ("name",)  # allows autocomplete + searching subjects
 
 

@@ -104,10 +104,7 @@
         </select>
       </div>
 
-      <div class="field" style="min-width:140px;">
-        <label for="rt-validity">Validity (days)</label>
-        <input id="rt-validity" type="number" min="1" value="365" />
-      </div>
+      
     </div>
   </div>
 
@@ -126,11 +123,17 @@
   <script>
     const subjectEl = document.getElementById("rt-subject");
     const windowEl = document.getElementById("rt-window");
-    const validityEl = document.getElementById("rt-validity");
     const resultsEl = document.getElementById("rt-results");
     const summaryEl = document.getElementById("rt-summary");
 
     const apiUrl = "{% url 'recurring_training_api' %}";
+
+
+    if (subjectEl.options.length > 1) {
+      subjectEl.selectedIndex = 1; // first real subject (after "-- Choose subject --")
+      load();
+}
+
 
     function daysPill(daysRemaining) {
   // daysRemaining can be negative if expired
@@ -197,7 +200,7 @@
     async function load() {
       const subjectId = subjectEl.value;
       const windowVal = windowEl.value;
-      const validityDays = validityEl.value || "365";
+      
 
       if (!subjectId) {
         summaryEl.textContent = "Choose a subject to load results.";
@@ -209,7 +212,7 @@
       resultsEl.innerHTML = "";
 
       try {
-        const url = `${apiUrl}?subject_id=${encodeURIComponent(subjectId)}&window=${encodeURIComponent(windowVal)}&validity_days=${encodeURIComponent(validityDays)}`;
+        const url = `${apiUrl}?subject_id=${encodeURIComponent(subjectId)}&window=${encodeURIComponent(windowVal)}`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -228,10 +231,6 @@
 
     subjectEl.addEventListener("change", load);
     windowEl.addEventListener("change", load);
-    validityEl.addEventListener("input", () => {
-      // small debounce without extra function
-      clearTimeout(window.__rtTimer);
-      window.__rtTimer = setTimeout(load, 300);
-    });
+    
   </script>
 {% endblock %}
