@@ -21,3 +21,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("training.urls")),
 ]
+
+handler403 = "training.views.custom_403"
