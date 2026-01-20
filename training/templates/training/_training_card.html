@@ -1,0 +1,29 @@
+{# One training card - same layout as before #}
+<div class="rowline">
+  <div class="rowleft">
+    <div class="rowtitle">
+      <a href="{% url 'training_detail' t.id %}">{{ t.name }}</a>
+    </div>
+
+    <div class="rowsub">
+      <strong>When:</strong> {{ t.start_at|date:"M j, Y, P" }} → {{ t.end_at|date:"M j, Y, P" }}
+      {% if t.place %}&nbsp; <strong>Where:</strong> {{ t.place }}{% endif %}
+
+      {# Keep your old capacity pill and add two more pills #}
+      {% if t.capacity %}
+        <span class="pill">Capacity: {{ t.capacity }}</span>
+      {% endif %}
+
+      <span class="pill">
+        Trainees: {{ t.trainee_count }}{% if t.capacity %}/{{ t.capacity }}{% endif %}
+      </span>
+
+      <span class="pill">Trainers: {{ t.trainer_count }}</span>
+    </div>
+  </div>
+
+  <div class="rowactions">
+    <a class="btn secondary" href="{% url 'training_detail' t.id %}">Open</a>
+    <a class="btn secondary" href="{% url 'training_edit' t.id %}">Edit</a>
+  </div>
+</div>

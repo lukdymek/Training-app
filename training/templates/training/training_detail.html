@@ -71,7 +71,8 @@
       <div>
         <h1 style="margin:0 0 6px;">{{ training.course_name }}</h1>
         <p class="help" style="margin:0;">
-          <strong>When:</strong> {{ training.start_at }} → {{ training.end_at }}<br>
+          <strong>When:</strong> {{ training.start_at }} → {{ training.end_at }}
+          <strong style="margin-left:10px;">(Total: {{ duration_days }} day{{ duration_days|pluralize }})</strong><br>
           <strong>Where:</strong> {{ training.location }}<br>
           <strong>Capacity:</strong> {{ trainees|length }} / {{ training.capacity }}
           {% if training.subject %}<br><strong>Subject:</strong> {{ training.subject.name }}{% endif %}
@@ -186,14 +187,37 @@
       <div style="height:12px;"></div>
 
       <div style="display:flex; flex-direction:column; gap:10px;">
-        {% for p in trainers %}
+       {% for p in trainers %}
           <div class="rowline">
             <div class="rowleft">
-              <div class="rowtitle">{{ p.person.last_name |upper}} {{ p.person.first_name }}</div>
-              <div class="rowsub">SYSPER ID: {{ p.person.sysper_id }}</div>
+              <div class="rowtitle">{{ p.person.last_name|upper }} {{ p.person.first_name }}</div>
+              <div class="rowsub">
+                SYSPER ID: {{ p.person.sysper_id }}
+                {% if p.days %}
+                  • Days: {{ p.days }}
+                {% else %}
+                  • Days: —
+                {% endif %}
+              </div>
             </div>
 
             <div class="rowactions">
+              <!-- ✅ Edit days -->
+              <form method="post" action="{% url 'update_trainer_days' training.pk p.id %}" class="inlineform" style="display:flex; gap:8px; align-items:center;">
+                {% csrf_token %}
+                <input
+                  type="number"
+                  name="days"
+                  step="0.5"
+                  min="0"
+                  value="{{ p.days|default_if_none:'' }}"
+                  placeholder="{{ duration_days }}"
+                  style="max-width:90px;"
+                  title="How many days this trainer teaches"
+                >
+                <button class="btn secondary small" type="submit">Save</button>
+              </form>
+
               <a class="btn secondary small" href="{% url 'person_history' p.person.id %}">History</a>
 
               <form method="post" action="{% url 'remove_participation' training.pk p.id %}" class="inlineform">
@@ -208,6 +232,7 @@
         {% empty %}
           <div style="color:var(--muted);">No trainers yet.</div>
         {% endfor %}
+
       </div>
     </div>
   </div>

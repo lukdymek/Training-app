@@ -32,6 +32,8 @@ urlpatterns = [
     path("people/", views.people_list, name="people_list"),
     path("people/<int:person_id>/history/", views.person_history, name="person_history"),
     path("api/people/", views.people_search_api, name="people_search_api"),
+    path("api/trainers/", views.trainer_search_api, name="trainer_search_api"),
+
 
 
 ]

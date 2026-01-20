@@ -28,18 +28,55 @@ from django.db.models import Prefetch
 from django.utils.timezone import now
 from django.core.paginator import Paginator
 from django.utils.http import urlencode
-
+from django.utils import timezone
 
 
 
 
 def training_list(request):
-    trainings = Training.objects.order_by("start_at")
-    return render(request, "training/training_list.html", {"trainings": trainings})
+    today = timezone.localdate()
+
+    qs = (
+        Training.objects.all()
+        .annotate(
+            trainee_count=Count(
+                "participation",
+                filter=Q(participation__role="TRAINEE"),
+                distinct=True,
+            ),
+            trainer_count=Count(
+                "participation",
+                filter=Q(participation__role="TRAINER"),
+                distinct=True,
+            ),
+        )
+        .order_by("-start_at")
+    )
+
+    current_trainings = qs.filter(start_at__date__lte=today, end_at__date__gte=today).order_by("start_at")
+    future_trainings = qs.filter(start_at__date__gt=today).order_by("start_at")
+    completed_trainings = qs.filter(end_at__date__lt=today).order_by("-start_at")
+
+    return render(
+        request,
+        "training/training_list.html",
+        {
+            "current_trainings": current_trainings,
+            "future_trainings": future_trainings,
+            "completed_trainings": completed_trainings,
+            "today": today,
+        },
+    )
 
 
 def training_detail(request, pk):
     training = get_object_or_404(Training, pk=pk)
+
+    # total training duration in days (inclusive)
+    # Example: Jan 1 to Jan 4 => 4 days
+    duration_days = (training.end_at.date() - training.start_at.date()).days + 1
+    if duration_days < 1:
+        duration_days = 1
 
     trainees = Participation.objects.filter(
         training=training, role="TRAINEE"
@@ -83,6 +120,7 @@ def training_detail(request, pk):
         "trainers": trainers,
         "available_trainers": available_trainers,
         "bulk_trainers_form": bulk_trainers_form,
+        "duration_days": duration_days, 
     }
 
     return render(request, "training/training_detail.html", context)
@@ -762,6 +800,41 @@ def people_search_api(request):
             "first_name": p.first_name,
             "last_name": p.last_name,
             # Display label used by dropdowns
+            "label": f"{p.sysper_id} — {p.last_name.upper()} {p.first_name}",
+        })
+
+    return JsonResponse({"results": results})
+
+@require_GET
+def trainer_search_api(request):
+    q = (request.GET.get("q") or "").strip()
+
+    # Keep it consistent with People page: don’t search until 2+ chars
+    if len(q) < 2:
+        return JsonResponse({"results": []})
+
+    # “Who is a trainer?”
+    # - has TrainerSkill OR
+    # - has ever been assigned as TRAINER in Participation
+    base_qs = Person.objects.filter(
+        Q(trainerskill__isnull=False) | Q(participation__role="TRAINER")
+    ).distinct()
+
+    qs = base_qs.filter(
+        Q(sysper_id__icontains=q) |
+        Q(last_name__icontains=q) |
+        Q(first_name__icontains=q) |
+        Q(email__icontains=q)
+    ).order_by("last_name", "first_name")[:25]
+
+    results = []
+    for p in qs:
+        results.append({
+            "id": p.id,
+            "sysper_id": p.sysper_id,
+            "first_name": p.first_name,
+            "last_name": p.last_name,
+            "email": p.email,
             "label": f"{p.sysper_id} — {p.last_name.upper()} {p.first_name}",
         })
 

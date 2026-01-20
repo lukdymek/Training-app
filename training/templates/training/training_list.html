@@ -67,17 +67,26 @@
 
   <div class="card">
     <div style="display:flex; flex-direction:column; gap:10px;">
-      {% for t in trainings %}
+
+      <h2 style="margin:0 0 6px;">Current trainings</h2>
+      {% for t in current_trainings %}
         <div class="train-row">
           <div class="train-left">
             <div class="train-title">
-              <a href="{% url 'training_detail' t.pk %}">{{ t.course_name }}</a>
+              <a href="{% url 'training_detail' t.pk %}">{{ t.course_name }}{% if t.subject %} – {{ t.subject }}{% endif %}</a>
             </div>
 
             <div class="train-meta">
               <span><strong>When:</strong> {{ t.start_at }} → {{ t.end_at }}</span>
               <span><strong>Where:</strong> {{ t.location }}</span>
-              <span class="pill">Capacity: {{ t.capacity }}</span>
+
+              <span class="pill">
+                Trainees: {{ t.trainee_count }}{% if t.capacity %}/{{ t.capacity }}{% endif %}
+              </span>
+
+              <span class="pill">Trainers: {{ t.trainer_count }}</span>
+
+              
             </div>
           </div>
 
@@ -87,8 +96,72 @@
           </div>
         </div>
       {% empty %}
-        <div style="color:var(--muted);">No trainings yet.</div>
+        <div style="color:var(--muted); margin-bottom:14px;">No current trainings.</div>
       {% endfor %}
+
+      <hr style="margin: 10px 0 4px; border:0; border-top:1px solid var(--border);">
+
+      <h2 style="margin:0 0 6px;">Future trainings</h2>
+      {% for t in future_trainings %}
+        <div class="train-row">
+          <div class="train-left">
+            <div class="train-title">
+              <a href="{% url 'training_detail' t.pk %}">{{ t.course_name }}{% if t.subject %} – {{ t.subject }}{% endif %}</a>
+            </div>
+
+            <div class="train-meta">
+              <span><strong>When:</strong> {{ t.start_at }} → {{ t.end_at }}</span>
+              <span><strong>Where:</strong> {{ t.location }}</span>
+
+              <span class="pill">
+                Trainees: {{ t.trainee_count }}{% if t.capacity %}/{{ t.capacity }}{% endif %}
+              </span>
+
+              <span class="pill">Trainers: {{ t.trainer_count }}</span>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+            <a class="btn secondary small" href="{% url 'training_detail' t.pk %}">Open</a>
+            <a class="btn secondary small" href="{% url 'training_edit' t.pk %}">Edit</a>
+          </div>
+        </div>
+      {% empty %}
+        <div style="color:var(--muted); margin-bottom:14px;">No future trainings.</div>
+      {% endfor %}
+
+      <hr style="margin: 10px 0 4px; border:0; border-top:1px solid var(--border);">
+
+      <h2 style="margin:0 0 6px;">Completed trainings</h2>
+      {% for t in completed_trainings %}
+        <div class="train-row">
+          <div class="train-left">
+            <div class="train-title">
+              <a href="{% url 'training_detail' t.pk %}">{{ t.course_name }}{% if t.subject %} – {{ t.subject }}{% endif %}</a>
+            </div>
+
+            <div class="train-meta">
+              <span><strong>When:</strong> {{ t.start_at }} → {{ t.end_at }}</span>
+              <span><strong>Where:</strong> {{ t.location }}</span>
+
+              <span class="pill">
+                Trainees: {{ t.trainee_count }}{% if t.capacity %}/{{ t.capacity }}{% endif %}
+              </span>
+
+              <span class="pill">Trainers: {{ t.trainer_count }}</span>
+
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+            <a class="btn secondary small" href="{% url 'training_detail' t.pk %}">Open</a>
+            <a class="btn secondary small" href="{% url 'training_edit' t.pk %}">Edit</a>
+          </div>
+        </div>
+      {% empty %}
+        <div style="color:var(--muted);">No completed trainings.</div>
+      {% endfor %}
+
     </div>
   </div>
 {% endblock %}

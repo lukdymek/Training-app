@@ -39,7 +39,7 @@
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
       <div>
         <h1 style="margin:0 0 6px;">Trainers</h1>
-        <p class="help" style="margin:0;">Search by name, email, or SYSPER ID.</p>
+        <p class="help" style="margin:0;">Search by name, email, or SYSPER ID. Results update as you type.</p>
       </div>
 
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -48,55 +48,116 @@
       </div>
     </div>
 
-    <form method="get" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
-      <div class="form-row" style="max-width:420px;">
+    <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+      <div class="form-row" style="max-width:520px;">
         <label for="trainer-search">Search</label>
         <input
           type="text"
           id="trainer-search"
-          name="q"
-          placeholder="SYSPER ID, name or email"
           value="{{ q|default:'' }}"
+          placeholder="Type 2+ characters to search..."
+          autocomplete="off"
         >
+        <div id="trainer-count" class="small" style="color:var(--muted); margin-top:6px;"></div>
       </div>
-
-      <div style="margin-top:10px;">
-        <button class="btn" type="submit">Search</button>
-      </div>
-    </form>
+    </div>
   </div>
 
   <div style="height:14px;"></div>
 
   <div class="card">
-    {% if not searched %}
-      <p class="help">Type SYSPER ID, last name, first name, or email and press Search.</p>
-    {% else %}
-      {% if trainers %}
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          {% for t in trainers %}
-            <div class="trainer-row">
-              <div class="trainer-left">
-                <div class="trainer-name">
-                  <a href="{% url 'trainer_detail' t.pk %}">
-                    {{ t.last_name }} {{ t.first_name }}
-                  </a>
-                </div>
-                <div class="trainer-meta">
-                  SYSPER ID: {{ t.sysper_id }}
-                  {% if t.email %} • {{ t.email }}{% endif %}
-                </div>
-              </div>
-
-              <div style="display:flex; gap:10px; align-items:center;">
-                <a class="btn secondary small" href="{% url 'trainer_detail' t.pk %}">View</a>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p style="color:var(--muted);">No trainers found.</p>
-      {% endif %}
-    {% endif %}
+    <div id="trainer-results" style="display:flex; flex-direction:column; gap:10px;">
+      <p class="help" id="trainer-help">Start typing to search trainers.</p>
+    </div>
   </div>
+
+  <script>
+    function debounce(fn, ms) {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    }
+
+    const input = document.getElementById("trainer-search");
+    const box = document.getElementById("trainer-results");
+    const count = document.getElementById("trainer-count");
+    const help = document.getElementById("trainer-help");
+
+    const searchUrl = "{% url 'trainer_search_api' %}";
+    const detailBase = "/trainers/"; // /trainers/<id>/
+
+    function render(results) {
+      box.innerHTML = "";
+      count.textContent = results.length ? `${results.length} match(es)` : "";
+
+      if (!results.length) {
+        const p = document.createElement("p");
+        p.style.color = "var(--muted)";
+        p.textContent = "No trainers found.";
+        box.appendChild(p);
+        return;
+      }
+
+      for (const t of results) {
+        const row = document.createElement("div");
+        row.className = "trainer-row";
+
+        const emailPart = t.email ? ` • ${t.email}` : "";
+
+        row.innerHTML = `
+          <div class="trainer-left">
+            <div class="trainer-name">
+              <a href="${detailBase}${t.id}/">
+                ${(t.last_name || "")} ${(t.first_name || "")}
+              </a>
+            </div>
+            <div class="trainer-meta">
+              SYSPER ID: ${t.sysper_id}${emailPart}
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <a class="btn secondary small" href="${detailBase}${t.id}/">View</a>
+          </div>
+        `;
+
+        box.appendChild(row);
+      }
+    }
+
+    const doSearch = debounce(async () => {
+      const q = input.value.trim();
+
+      if (q.length < 2) {
+        count.textContent = "";
+        box.innerHTML = "";
+        const p = document.createElement("p");
+        p.className = "help";
+        p.style.color = "var(--muted)";
+        p.textContent = "Start typing to search trainers.";
+        box.appendChild(p);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        render(data.results || []);
+      } catch (e) {
+        box.innerHTML = "";
+        const p = document.createElement("p");
+        p.style.color = "var(--muted)";
+        p.textContent = "Search failed. Please try again.";
+        box.appendChild(p);
+      }
+    }, 250);
+
+    input.addEventListener("input", doSearch);
+
+    // If there is already a value (e.g. coming back in browser), auto-search.
+    if (input.value.trim().length >= 2) {
+      doSearch();
+    }
+  </script>
 {% endblock %}
