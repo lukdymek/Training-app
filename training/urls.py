@@ -33,7 +33,8 @@ urlpatterns = [
     path("people/<int:person_id>/history/", views.person_history, name="person_history"),
     path("api/people/", views.people_search_api, name="people_search_api"),
     path("api/trainers/", views.trainer_search_api, name="trainer_search_api"),
-
+    path("recurring-training/", views.recurring_training, name="recurring_training"),
+    path("api/recurring-training/", views.recurring_training_api, name="recurring_training_api"),
 
 
 ]

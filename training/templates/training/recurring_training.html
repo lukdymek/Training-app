@@ -1,0 +1,237 @@
+{% extends "training/base.html" %}
+{% block title %}Recurring training{% endblock %}
+
+{% block content %}
+  <style>
+    .rt-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:12px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background: var(--input-bg);
+    }
+    .rt-left{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+    }
+    .rt-title{
+      font-weight:800;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 720px;
+    }
+    .rt-meta{
+      color: var(--muted);
+      font-size: 13px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .pill{
+    display:inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  /* Color-coded variants */
+  .pill.green  { background: #e7f7ee; border-color:#b7e3c9; color:#0f5132; }
+  .pill.yellow { background: #fff6d8; border-color:#f0d17a; color:#664d03; }
+  .pill.orange { background: #ffe8d6; border-color:#f5b38f; color:#7a3e00; }
+  .pill.red    { background: #fde2e1; border-color:#f3a6a2; color:#842029; }
+    .pill.ok { }
+    .pill.expiring { }
+    .pill.expired { }
+    .rt-controls{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:flex-end;
+      margin-top: 12px;
+    }
+    .rt-controls .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-width: 220px;
+    }
+  </style>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">Recurring training</h1>
+        <p class="help" style="margin:0;">
+          Pick a subject and a filter to see who is OK, expiring soon, or expired.
+        </p>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <a class="btn secondary" href="{% url 'people_list' %}">People</a>
+        <a class="btn secondary" href="{% url 'training_list' %}">Trainings</a>
+        <a class="btn secondary" href="{% url 'calendar' %}">Calendar</a>
+      </div>
+    </div>
+
+    <div class="rt-controls">
+      <div class="field">
+        <label for="rt-subject">Subject</label>
+        <select id="rt-subject">
+          <option value="">-- Choose subject --</option>
+          {% for s in subjects %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="rt-window">Show</label>
+        <select id="rt-window">
+          <option value="all">All</option>
+          <option value="90">Expiring in 90 days</option>
+          <option value="30">Expiring in 30 days</option>
+          <option value="expired">Expired</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:140px;">
+        <label for="rt-validity">Validity (days)</label>
+        <input id="rt-validity" type="number" min="1" value="365" />
+      </div>
+    </div>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <div id="rt-summary" class="help" style="margin-bottom:10px; color:var(--muted);">
+      Choose a subject to load results.
+    </div>
+
+    <div id="rt-results" style="display:flex; flex-direction:column; gap:10px;">
+      <div style="color:var(--muted);">No results.</div>
+    </div>
+  </div>
+
+  <script>
+    const subjectEl = document.getElementById("rt-subject");
+    const windowEl = document.getElementById("rt-window");
+    const validityEl = document.getElementById("rt-validity");
+    const resultsEl = document.getElementById("rt-results");
+    const summaryEl = document.getElementById("rt-summary");
+
+    const apiUrl = "{% url 'recurring_training_api' %}";
+
+    function daysPill(daysRemaining) {
+  // daysRemaining can be negative if expired
+        let cls = "green";
+        let label = `OK (${daysRemaining}d)`;
+
+        if (daysRemaining < 0) {
+            cls = "red";
+            label = `Expired (${daysRemaining}d)`;
+        } else if (daysRemaining < 5) {
+            cls = "red";
+            label = `Expiring (${daysRemaining}d)`;
+        } else if (daysRemaining <= 30) {
+            cls = "orange";
+            label = `Expiring (${daysRemaining}d)`;
+        } else if (daysRemaining <= 90) {
+            cls = "yellow";
+            label = `Expiring (${daysRemaining}d)`;
+        } else {
+            cls = "green";
+            label = `OK (${daysRemaining}d)`;
+        }
+
+        return `<span class="pill ${cls}">${label}</span>`;
+        }
+
+    function render(list, meta) {
+      resultsEl.innerHTML = "";
+
+      summaryEl.textContent = `Showing ${list.length} result(s). Today: ${meta.today}. Validity: ${meta.validity_days} days.`;
+
+      if (!list.length) {
+        resultsEl.innerHTML = `<div style="color:var(--muted);">No matching people.</div>`;
+        return;
+      }
+
+      for (const p of list) {
+        const emailPart = p.email ? ` • ${p.email}` : "";
+        const row = document.createElement("div");
+        row.className = "rt-row";
+
+        row.innerHTML = `
+          <div class="rt-left">
+            <div class="rt-title">
+              ${p.last_name || ""} ${p.first_name || ""} — ${p.sysper_id}
+            </div>
+            <div class="rt-meta">
+              <span><strong>Last:</strong> ${p.last_completed}</span>
+              <span><strong>Expires:</strong> ${p.expires_on}</span>
+             ${daysPill(p.days_remaining)}
+              <span>${emailPart}</span>
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+            <a class="btn secondary small" href="/people/${p.person_id}/history/">History</a>
+          </div>
+        `;
+
+        resultsEl.appendChild(row);
+      }
+    }
+
+    async function load() {
+      const subjectId = subjectEl.value;
+      const windowVal = windowEl.value;
+      const validityDays = validityEl.value || "365";
+
+      if (!subjectId) {
+        summaryEl.textContent = "Choose a subject to load results.";
+        resultsEl.innerHTML = `<div style="color:var(--muted);">No results.</div>`;
+        return;
+      }
+
+      summaryEl.textContent = "Loading...";
+      resultsEl.innerHTML = "";
+
+      try {
+        const url = `${apiUrl}?subject_id=${encodeURIComponent(subjectId)}&window=${encodeURIComponent(windowVal)}&validity_days=${encodeURIComponent(validityDays)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+          summaryEl.textContent = data.error || "Failed to load.";
+          resultsEl.innerHTML = `<div style="color:var(--muted);">No results.</div>`;
+          return;
+        }
+
+        render(data.results || [], data.meta || {today:"", validity_days:validityDays});
+      } catch (e) {
+        summaryEl.textContent = "Failed to load results.";
+        resultsEl.innerHTML = `<div style="color:var(--muted);">No results.</div>`;
+      }
+    }
+
+    subjectEl.addEventListener("change", load);
+    windowEl.addEventListener("change", load);
+    validityEl.addEventListener("input", () => {
+      // small debounce without extra function
+      clearTimeout(window.__rtTimer);
+      window.__rtTimer = setTimeout(load, 300);
+    });
+  </script>
+{% endblock %}

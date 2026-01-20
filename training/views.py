@@ -29,6 +29,10 @@ from django.utils.timezone import now
 from django.core.paginator import Paginator
 from django.utils.http import urlencode
 from django.utils import timezone
+from datetime import timedelta
+from django.contrib.auth.decorators import login_required
+from django.db.models import Max
+
 
 
 
@@ -839,3 +843,110 @@ def trainer_search_api(request):
         })
 
     return JsonResponse({"results": results})
+
+@login_required
+def recurring_training(request):
+    """
+    Page with dropdowns (subject + filter) and a dynamic list loaded via API.
+    """
+    subjects = Subject.objects.order_by("name")
+    return render(request, "training/recurring_training.html", {"subjects": subjects})
+
+
+@require_GET
+@login_required
+def recurring_training_api(request):
+    """
+    Returns JSON list of people with:
+      - last completed date for selected subject
+      - expiry date (last + validity days)
+      - days remaining
+      - status: ok / expiring / expired
+    Query params:
+      - subject_id (required)
+      - window: all | 90 | 30 | expired   (default: all)
+      - validity_days: int (default: 365)  (optional, but useful later)
+    """
+    subject_id = request.GET.get("subject_id")
+    window = (request.GET.get("window") or "all").strip().lower()
+    validity_days = int(request.GET.get("validity_days") or 365)
+
+    if not subject_id:
+        return JsonResponse({"results": [], "error": "subject_id is required"}, status=400)
+
+    try:
+        subject_id = int(subject_id)
+    except ValueError:
+        return JsonResponse({"results": [], "error": "subject_id must be an integer"}, status=400)
+
+    today = timezone.localdate()
+
+    # One row per person: find their latest completion for that subject
+    rows = (
+        Participation.objects
+        .filter(
+            role="TRAINEE",
+            training__subject_id=subject_id,
+            person__is_active=True,
+        )
+        .values(
+            "person_id",
+            "person__sysper_id",
+            "person__first_name",
+            "person__last_name",
+            "person__email",
+        )
+        .annotate(last_end_at=Max("training__end_at"))
+    )
+
+    results = []
+    for r in rows:
+        last_end_at = r["last_end_at"]
+        if not last_end_at:
+            # Shouldn’t happen due to Max, but keep safe
+            continue
+
+        last_completed = timezone.localtime(last_end_at).date()
+        expires_on = last_completed + timedelta(days=validity_days)
+        days_remaining = (expires_on - today).days
+
+        if days_remaining < 0:
+            status = "expired"
+        elif days_remaining <= 30:
+            status = "expiring"
+        else:
+            status = "ok"
+
+        # Apply window filter
+        if window == "expired" and status != "expired":
+            continue
+        if window == "30" and not (0 <= days_remaining <= 30):
+            continue
+        if window == "90" and not (0 <= days_remaining <= 90):
+            continue
+        # window == "all" -> include everything
+
+        results.append({
+            "person_id": r["person_id"],
+            "sysper_id": r["person__sysper_id"],
+            "first_name": r["person__first_name"],
+            "last_name": r["person__last_name"],
+            "email": r["person__email"] or "",
+            "last_completed": last_completed.isoformat(),
+            "expires_on": expires_on.isoformat(),
+            "days_remaining": days_remaining,
+            "status": status,
+        })
+
+    # Sort: expired first (most overdue first), then expiring soon, then OK
+    status_rank = {"expired": 0, "expiring": 1, "ok": 2}
+    results.sort(key=lambda x: (status_rank.get(x["status"], 9), x["days_remaining"]))
+
+    return JsonResponse({
+        "results": results,
+        "meta": {
+            "today": today.isoformat(),
+            "validity_days": validity_days,
+            "window": window,
+        }
+    })
