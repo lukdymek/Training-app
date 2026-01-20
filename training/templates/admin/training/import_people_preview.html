@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <h1>Preview import</h1>
+
+  
+  <p>
+    Rows parsed: <strong>{{ count }}</strong> (skipped: {{ skipped }})
+  </p>
+
+  <ul>
+    <li>Will create: <strong>{{ will_create }}</strong></li>
+    <li>Will update: <strong>{{ will_update }}</strong></li>
+    <li>Will archive missing: <strong>{{ will_archive }}</strong>{% if not archive_missing %} (archiving disabled){% endif %}</li>
+  </ul>
+
+  <p>First 10 rows preview:</p>
+
+  <table class="adminlist">
+    <thead>
+      <tr>
+        <th>SYSPer</th>
+        <th>Surname</th>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Deployment</th>
+        <th>Category</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in preview %}
+        <tr>
+          <td>{{ r.sysper_id }}</td>
+          <td>{{ r.last_name }}</td>
+          <td>{{ r.first_name }}</td>
+          <td>{{ r.email }}</td>
+          <td>{{ r.current_deployment }}</td>
+          <td>{{ r.category }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="confirm" value="1">
+    <button class="default" type="submit"
+            onclick="return confirm('Import these rows into the database?')">
+      Confirm import
+    </button>
+    <a href=".." style="margin-left:12px;">Cancel</a>
+  </form>
+{% endblock %}
