@@ -10,6 +10,9 @@ from django.utils.decorators import method_decorator
 from openpyxl import load_workbook
 from datetime import datetime, date
 from django.db import transaction
+from django.utils.dateparse import parse_date
+import os
+import tempfile
 
 
 
@@ -131,12 +134,83 @@ class PersonAdmin(admin.ModelAdmin):
     def import_people_excel(self, request):
         """
         Step 1 (POST without confirm):
-            Upload Excel -> parse -> preview (store parsed rows in session)
+            Upload Excel -> parse -> preview (store file path in session)
 
         Step 2 (POST with confirm=1):
-            Write to DB
+            Re-read Excel from temp file -> bulk upsert to DB
             Optionally archive missing people (is_active=False)
         """
+
+        # =====================================================
+        # Helper: read workbook and parse rows from it
+        # =====================================================
+        def parse_people_from_workbook(workbook):
+            ws = workbook.active
+
+            headers = [normalize_header(c.value) for c in ws[1]]
+            col = {h: i for i, h in enumerate(headers)}
+
+            def pick(*names):
+                for n in names:
+                    if n in col:
+                        return col[n]
+                return None
+
+            idx_sysper = pick("sysper_id", "sysperid", "sysper", "id")
+            idx_first = pick("first_name", "firstname", "first", "name", "given_name")
+            idx_last = pick("last_name", "lastname", "last", "surname", "family_name")
+            idx_email = pick("email", "email_address", "e-mail")
+            idx_dob = pick("dob", "date_of_birth", "birth_date")
+            idx_gender = pick("gender", "sex")
+            idx_category = pick("category", "employee_category", "cat")
+            idx_deploy = pick("current_deployment", "deployment", "current_assignment", "deployed")
+
+            if idx_sysper is None:
+                raise ValueError(f"Could not find SYSPer ID column. Headers detected: {headers}")
+
+            rows = []
+            incoming_ids = set()
+            skipped = 0
+
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                sysper_val = row[idx_sysper]
+                if not sysper_val or str(sysper_val).strip() == "":
+                    skipped += 1
+                    continue
+
+                try:
+                    sysper_id = int(str(sysper_val).strip())
+                except ValueError:
+                    skipped += 1
+                    continue
+
+                incoming_ids.add(sysper_id)
+
+                first_name = (row[idx_first] if idx_first is not None else "") or ""
+                last_name = (row[idx_last] if idx_last is not None else "") or ""
+                email = (row[idx_email] if idx_email is not None else "") or ""
+
+                dob_date = parse_date(row[idx_dob] if idx_dob is not None else None)
+                # Keep DOB as ISO string if we need preview; for DB we convert back to date
+                dob_iso = dob_date.isoformat() if dob_date else ""
+
+                gender = (row[idx_gender] if idx_gender is not None else "") or ""
+                category = (row[idx_category] if idx_category is not None else "") or ""
+                current_deployment = (row[idx_deploy] if idx_deploy is not None else "") or ""
+
+                rows.append({
+                    "sysper_id": sysper_id,
+                    "first_name": str(first_name).strip(),
+                    "last_name": str(last_name).strip(),
+                    "email": str(email).strip(),
+                    "dob": dob_iso,
+                    "gender": str(gender).strip(),
+                    "category": str(category).strip(),
+                    "current_deployment": str(current_deployment).strip(),
+                })
+
+            return headers, rows, incoming_ids, skipped
+
 
         # =====================================================
         # GET — show upload form
@@ -152,59 +226,90 @@ class PersonAdmin(admin.ModelAdmin):
         # POST — CONFIRM IMPORT
         # =====================================================
         if request.POST.get("confirm") == "1":
-            rows = request.session.get("people_import_rows") or []
+            tmp_path = request.session.get("people_import_tmp_path")
             archive_missing = request.session.get("people_import_archive_missing", True)
 
-            if not rows:
-                messages.error(request, "No pending import found. Please upload the file again.")
+            if not tmp_path or not os.path.exists(tmp_path):
+                messages.error(request, "No pending import file found. Please upload the file again.")
                 return redirect("..")
 
-            incoming_ids = set()
-            created = 0
-            updated = 0
+            try:
+                wb = load_workbook(filename=tmp_path, data_only=True)
+                headers, rows, incoming_ids, skipped = parse_people_from_workbook(wb)
+            except Exception as e:
+                messages.error(request, f"Failed to read the uploaded file again: {e}")
+                return redirect("..")
 
+            # De-duplicate by sysper_id (if file has duplicates, last row wins)
+            rows_by_id = {}
             for r in rows:
-                sysper_id = r.get("sysper_id")
-                if not sysper_id:
-                    continue
+                sid = r.get("sysper_id")
+                if sid:
+                    rows_by_id[int(sid)] = r
 
-                incoming_ids.add(sysper_id)
+            incoming_ids = set(rows_by_id.keys())
 
-                # DOB stored as ISO string in session → convert back to date
-                dob = parse_date(r.get("dob"))
+            # Counts (optional, but nice to show)
+            existing_ids = set(
+                Person.objects.filter(sysper_id__in=incoming_ids)
+                .values_list("sysper_id", flat=True)
+            )
+            created = len(incoming_ids - existing_ids)
+            updated = len(incoming_ids & existing_ids)
 
-                obj, was_created = Person.objects.update_or_create(
-                    sysper_id=sysper_id,
-                    defaults={
-                        "first_name": (r.get("first_name") or "").strip(),
-                        "last_name": (r.get("last_name") or "").strip(),
-                        "email": (r.get("email") or "").strip(),
-                        "dob": dob,
-                        "gender": (r.get("gender") or "").strip(),
-                        "category": (r.get("category") or "").strip(),
-                        "current_deployment": (r.get("current_deployment") or "").strip(),
-                        "is_active": True,
-                    },
+            # Build model objects for bulk upsert
+            objs = []
+            for sysper_id, r in rows_by_id.items():
+                dob = parse_date(r.get("dob"))  # convert ISO string back to date
+                objs.append(
+                    Person(
+                        sysper_id=sysper_id,
+                        first_name=(r.get("first_name") or "").strip(),
+                        last_name=(r.get("last_name") or "").strip(),
+                        email=(r.get("email") or "").strip(),
+                        dob=dob,
+                        gender=(r.get("gender") or "").strip(),
+                        category=(r.get("category") or "").strip(),
+                        current_deployment=(r.get("current_deployment") or "").strip(),
+                        is_active=True,
+                    )
                 )
 
-                if was_created:
-                    created += 1
-                else:
-                    updated += 1
+            # IMPORTANT: fast DB write (batched UPSERT)
+            with transaction.atomic():
+                Person.objects.bulk_create(
+                    objs,
+                    update_conflicts=True,          # enables "upsert" on Postgres
+                    unique_fields=["sysper_id"],    # conflict target
+                    update_fields=[
+                        "first_name",
+                        "last_name",
+                        "email",
+                        "dob",
+                        "gender",
+                        "category",
+                        "current_deployment",
+                        "is_active",
+                    ],
+                    batch_size=1000,                # tune if needed
+                )
 
-            archived = 0
-            if archive_missing:
-                archived = Person.objects.exclude(
-                    sysper_id__in=incoming_ids
-                ).update(is_active=False)
+                archived = 0
+                if archive_missing:
+                    archived = Person.objects.exclude(sysper_id__in=incoming_ids).update(is_active=False)
 
-            # cleanup session
-            request.session.pop("people_import_rows", None)
+            # Cleanup: remove temp file and session keys
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+
+            request.session.pop("people_import_tmp_path", None)
             request.session.pop("people_import_archive_missing", None)
 
             messages.success(
                 request,
-                f"Import complete. created={created}, updated={updated}, archived={archived}",
+                f"Import complete. created={created}, updated={updated}, archived={archived}, skipped={skipped}",
             )
             return redirect("..")
 
@@ -214,111 +319,59 @@ class PersonAdmin(admin.ModelAdmin):
 
         form = PeopleImportForm(request.POST, request.FILES)
         if not form.is_valid():
-            return render(
-                request,
-                "admin/training/import_people.html",
-                {"form": form},
-            )
+            return render(request, "admin/training/import_people.html", {"form": form})
 
         f = form.cleaned_data["file"]
-        archive_missing = form.cleaned_data.get("archive_missing", True)
 
-        wb = load_workbook(filename=f, data_only=True)
-        ws = wb.active
+        # Your form field is called replace_missing, but old code used archive_missing.
+        # We'll support both safely:
+        archive_missing = form.cleaned_data.get("replace_missing", True)
 
-        headers = [normalize_header(c.value) for c in ws[1]]
-        col = {h: i for i, h in enumerate(headers)}
+        # Save uploaded file to a temp file (so we don't store thousands of rows in session)
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+        try:
+            for chunk in f.chunks():
+                tmp.write(chunk)
+            tmp.flush()
+            tmp_path = tmp.name
+        finally:
+            tmp.close()
 
-        def pick(*names):
-            for n in names:
-                if n in col:
-                    return col[n]
-            return None
-
-        idx_sysper = pick("sysper_id", "sysperid", "sysper", "id")
-        idx_first = pick("first_name", "firstname", "first", "name", "given_name")
-        idx_last = pick("last_name", "lastname", "last", "surname", "family_name")
-        idx_email = pick("email", "email_address", "e-mail")
-        idx_dob = pick("dob", "date_of_birth", "birth_date")
-        idx_gender = pick("gender", "sex")
-        idx_category = pick("category", "employee_category", "cat")
-        idx_deploy = pick("current_deployment", "deployment", "current_assignment", "deployed")
-
-        if idx_sysper is None:
-            messages.error(
-                request,
-                f"Could not find SYSPer ID column. Headers detected: {headers}",
-            )
-            return render(
-                request,
-                "admin/training/import_people.html",
-                {"form": PeopleImportForm()},
-            )
-
-        parsed = []
-        incoming_ids = set()
-        skipped = 0
-
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            sysper_val = row[idx_sysper]
-            if not sysper_val or str(sysper_val).strip() == "":
-                skipped += 1
-                continue
-
+        try:
+            wb = load_workbook(filename=tmp_path, data_only=True)
+            headers, rows, incoming_ids, skipped = parse_people_from_workbook(wb)
+        except Exception as e:
             try:
-                sysper_id = int(str(sysper_val).strip())
-            except ValueError:
-                skipped += 1
-                continue
-
-            incoming_ids.add(sysper_id)
-
-            first_name = (row[idx_first] if idx_first is not None else "") or ""
-            last_name = (row[idx_last] if idx_last is not None else "") or ""
-            email = (row[idx_email] if idx_email is not None else "") or ""
-
-            # IMPORTANT: convert DOB to DATE, then to ISO STRING for session
-            dob_date = parse_date(row[idx_dob] if idx_dob is not None else None)
-            dob_iso = dob_date.isoformat() if dob_date else ""
-
-            gender = (row[idx_gender] if idx_gender is not None else "") or ""
-            category = (row[idx_category] if idx_category is not None else "") or ""
-            current_deployment = (row[idx_deploy] if idx_deploy is not None else "") or ""
-
-            parsed.append({
-                "sysper_id": sysper_id,
-                "first_name": str(first_name).strip(),
-                "last_name": str(last_name).strip(),
-                "email": str(email).strip(),
-                "dob": dob_iso,  # SAFE for session (string)
-                "gender": str(gender).strip(),
-                "category": str(category).strip(),
-                "current_deployment": str(current_deployment).strip(),
-            })
+                os.remove(tmp_path)
+            except Exception:
+                pass
+            messages.error(request, f"Could not read this Excel file: {e}")
+            return render(request, "admin/training/import_people.html", {"form": PeopleImportForm()})
 
         existing_ids = set(
             Person.objects.filter(sysper_id__in=incoming_ids)
             .values_list("sysper_id", flat=True)
         )
 
-        will_update = sum(1 for r in parsed if r["sysper_id"] in existing_ids)
-        will_create = len(parsed) - will_update
+        will_update = sum(1 for r in rows if r["sysper_id"] in existing_ids)
+        will_create = len(rows) - will_update
         will_archive = (
             Person.objects.exclude(sysper_id__in=incoming_ids).count()
             if archive_missing
             else 0
         )
 
-        request.session["people_import_rows"] = parsed
+        # Store only temp file path + settings in session
+        request.session["people_import_tmp_path"] = tmp_path
         request.session["people_import_archive_missing"] = archive_missing
 
         return render(
             request,
             "admin/training/import_people_preview.html",
             {
-                "count": len(parsed),
+                "count": len(rows),
                 "skipped": skipped,
-                "preview": parsed[:10],
+                "preview": rows[:10],
                 "will_create": will_create,
                 "will_update": will_update,
                 "will_archive": will_archive,
