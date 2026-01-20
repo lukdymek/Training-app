@@ -17,6 +17,9 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+admin.site.site_header = "Training App"
+admin.site.site_title = "Training App Admin"
+admin.site.index_title = "Administration"
 admin.site.site_url = "/calendar/"
 
 urlpatterns = [
