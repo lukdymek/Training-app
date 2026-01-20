@@ -32,11 +32,63 @@ from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.db.models import Max
+from django.contrib.auth import authenticate, login, get_user_model
+from django.http import HttpResponseForbidden
+from functools import wraps
+from django.core.exceptions import PermissionDenied
 
 
 
 
+def staff_required(view_func):
+    @wraps(view_func)
+    @login_required
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_staff:
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+    return _wrapped
 
+def login_view(request):
+    if request.user.is_authenticated:
+        return redirect("calendar")
+
+    if request.method == "POST":
+        identifier = (request.POST.get("identifier") or "").strip()
+        password = request.POST.get("password") or ""
+        next_url = request.POST.get("next") or request.GET.get("next") or ""
+
+        # ✅ Only allow email OR exactly "admin"
+        is_admin_login = (identifier.lower() == "admin")
+        looks_like_email = ("@" in identifier and "." in identifier)
+
+        if not is_admin_login and not looks_like_email:
+            messages.error(request, "Please enter a valid email address.")
+            return render(request, "training/login.html", {"next": next_url})
+
+        user = None
+
+        # 1) Admin login by username "admin"
+        if is_admin_login:
+            user = authenticate(request, username="admin", password=password)
+
+        # 2) Email login (find user by email, then auth using username)
+        if user is None and looks_like_email:
+            User = get_user_model()
+            u = User.objects.filter(email__iexact=identifier).first()
+            if u:
+                user = authenticate(request, username=u.username, password=password)
+
+        if user is not None:
+            login(request, user)
+            return redirect(next_url or "calendar")
+
+        messages.error(request, "Invalid login details. Please try again.")
+
+    return render(request, "training/login.html", {"next": request.GET.get("next", "")})
+
+@login_required
+@staff_required
 def training_list(request):
     today = timezone.localdate()
 
@@ -72,7 +124,8 @@ def training_list(request):
         },
     )
 
-
+@login_required
+@staff_required
 def training_detail(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
@@ -130,7 +183,8 @@ def training_detail(request, pk):
     return render(request, "training/training_detail.html", context)
 
 
-
+@login_required
+@staff_required
 def add_trainee(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
@@ -178,6 +232,8 @@ def add_trainee(request, pk):
 
     return redirect("training_detail", pk=pk)
 
+@login_required
+@staff_required
 def add_trainer(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
@@ -214,10 +270,11 @@ def add_trainer(request, pk):
 
     return redirect("training_detail", pk=pk)
 
-
+@login_required
 def calendar_view(request):
     return render(request, "training/calendar.html")
 
+@login_required
 def calendar_filters(request):
     subjects = list(Subject.objects.order_by("name").values("id", "name"))
     locations = list(
@@ -228,6 +285,7 @@ def calendar_filters(request):
     locations = [l for l in locations if l]  # remove blanks
     return JsonResponse({"subjects": subjects, "locations": locations})
 
+@login_required
 def trainings_json(request):
     subject_id = request.GET.get("subject_id", "").strip()
     location = request.GET.get("location", "").strip()
@@ -267,7 +325,8 @@ def trainings_json(request):
 
     return JsonResponse(events, safe=False)
 
-
+@login_required
+@staff_required
 def training_create(request):
     initial = {}
 
@@ -293,7 +352,8 @@ def training_create(request):
         "submit_label": "Create",
     })
 
-
+@login_required
+@staff_required
 def training_edit(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
@@ -327,7 +387,8 @@ def training_edit(request, pk):
     })
 
 
-
+@login_required
+@staff_required
 def training_delete(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
@@ -341,7 +402,8 @@ def training_delete(request, pk):
     return render(request, "training/training_confirm_delete.html", {"training": training})
 
 
-
+@login_required
+@staff_required
 def trainer_list(request):
     q = request.GET.get("q", "").strip()
 
@@ -371,7 +433,8 @@ def trainer_list(request):
         "searched": True,
     })
 
-
+@login_required
+@staff_required
 def trainer_detail(request, pk):
     trainer = get_object_or_404(Person, pk=pk)
 
@@ -394,7 +457,8 @@ def trainer_detail(request, pk):
         },
     )
 
-
+@login_required
+@staff_required
 def add_trainer_skill(request, pk):
     trainer = get_object_or_404(Person, pk=pk)
 
@@ -406,7 +470,8 @@ def add_trainer_skill(request, pk):
 
     return redirect("trainer_detail", pk=pk)
 
-
+@login_required
+@staff_required
 @require_POST
 def remove_trainer_skill(request, pk, subject_id):
     trainer = get_object_or_404(Person, pk=pk)
@@ -420,11 +485,13 @@ def remove_trainer_skill(request, pk, subject_id):
 
     return redirect("trainer_detail", pk=trainer.pk)
 
-
+@login_required
+@staff_required
 def reports_home(request):
     return render(request, "training/reports_home.html")
 
-
+@login_required
+@staff_required
 def report_person(request):
     sysper = request.GET.get("sysper_id", "").strip()
     person = None
@@ -444,7 +511,8 @@ def report_person(request):
         "rows": rows,
     })
 
-
+@login_required
+@staff_required
 def report_person_export(request):
     sysper = request.GET.get("sysper_id", "").strip()
     if not sysper.isdigit():
@@ -479,7 +547,8 @@ def report_person_export(request):
         ])
     return resp
 
-
+@login_required
+@staff_required
 def report_trainers(request):
     """
     Totals trainer days per trainer for a given month.
@@ -512,7 +581,8 @@ def report_trainers(request):
         "rows": qs,
     })
 
-
+@login_required
+@staff_required
 def report_trainers_export(request):
     year = request.GET.get("year", "").strip()
     month = request.GET.get("month", "").strip()
@@ -546,6 +616,8 @@ def report_trainers_export(request):
 
     return resp
 
+@login_required
+@staff_required
 @require_POST
 def update_trainer_days(request, pk, participation_id):
     training = get_object_or_404(Training, pk=pk)
@@ -581,6 +653,8 @@ def update_trainer_days(request, pk, participation_id):
     messages.success(request, f"Days updated for {p.person}: {days}")
     return redirect("training_detail", pk=pk)
 
+@login_required
+@staff_required
 @require_GET
 def people_search(request, pk):
     training = get_object_or_404(Training, pk=pk)
@@ -634,7 +708,8 @@ def people_search(request, pk):
         ]
     })
 
-
+@login_required
+@staff_required
 @require_POST
 def remove_trainee(request, pk, person_id):
     training = get_object_or_404(Training, pk=pk)
@@ -646,6 +721,8 @@ def remove_trainee(request, pk, person_id):
     messages.success(request, "Trainee removed from training.")
     return redirect("training_detail", pk=pk)
 
+@login_required
+@staff_required
 @require_POST
 def remove_trainer(request, pk, person_id):
     training = get_object_or_404(Training, pk=pk)
@@ -658,6 +735,8 @@ def remove_trainer(request, pk, person_id):
     return redirect("training_detail", pk=pk)
 
 
+@login_required
+@staff_required
 @require_POST
 def remove_participation(request, pk, participation_id):
     training = get_object_or_404(Training, pk=pk)
@@ -670,7 +749,8 @@ def remove_participation(request, pk, participation_id):
     messages.success(request, "Removed from training.")
     return redirect("training_detail", pk=pk)
 
-
+@login_required
+@staff_required
 @require_POST
 def add_trainers_bulk(request, pk):
     training = get_object_or_404(Training, pk=pk)
@@ -723,7 +803,7 @@ def add_trainers_bulk(request, pk):
 
     return redirect("training_detail", pk=pk)
 
-
+@login_required
 def person_history(request, person_id):
     person = get_object_or_404(Person, pk=person_id)
     t = now()
@@ -751,6 +831,8 @@ def person_history(request, person_id):
         },
     )
 
+@login_required
+@staff_required
 def people_list(request):
     q = (request.GET.get("q") or "").strip()
 
@@ -781,6 +863,8 @@ def people_list(request):
         },
     )
 
+@login_required
+@staff_required
 @require_GET
 def people_search_api(request):
     q = (request.GET.get("q") or "").strip()
@@ -809,6 +893,8 @@ def people_search_api(request):
 
     return JsonResponse({"results": results})
 
+@login_required
+@staff_required
 @require_GET
 def trainer_search_api(request):
     q = (request.GET.get("q") or "").strip()
@@ -845,6 +931,8 @@ def trainer_search_api(request):
     return JsonResponse({"results": results})
 
 @login_required
+@staff_required
+@login_required
 def recurring_training(request):
     """
     Page with dropdowns (subject + filter) and a dynamic list loaded via API.
@@ -853,6 +941,7 @@ def recurring_training(request):
     return render(request, "training/recurring_training.html", {"subjects": subjects})
 
 
+@staff_required
 @require_GET
 @login_required
 def recurring_training_api(request):
@@ -955,3 +1044,26 @@ def recurring_training_api(request):
             "subject": subject.name,
         }
     })
+
+
+@login_required
+def my_history(request):
+    email = (request.user.email or "").strip().lower()
+
+    if not email:
+        messages.error(request, "Your account has no email address set. Please contact admin.")
+        return redirect("calendar")
+
+    person = Person.objects.filter(email__iexact=email).first()
+    if not person:
+        messages.error(
+            request,
+            "No Person record found for your email. Please contact admin."
+        )
+        return redirect("calendar")
+
+    # You already have this view + URL name in your project:
+    return redirect("person_history", person_id=person.pk)
+
+def custom_403(request, exception=None):
+    return render(request, "403.html", status=403)

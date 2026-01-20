@@ -32,9 +32,9 @@
       </div>
 
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <a class="btn secondary" href="{% url 'training_list' %}">Trainings list</a>
-        <a class="btn secondary" href="{% url 'people_list' %}">People</a>
-        <a class="btn" href="{% url 'training_create' %}">Add training</a>
+        {% if request.user.is_staff %}
+      <a class="btn" href="{% url 'training_create' %}">Add training</a>
+      {% endif %}
       </div>
     </div>
 
@@ -120,7 +120,7 @@
         opt.textContent = loc;
         locationFilter.appendChild(opt);
       }
-
+      
       const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         displayEventTime: false,
@@ -172,6 +172,8 @@
             tooltip.style.display = "none";
           });
         },
+
+        
 
         eventClick: function(info) {
           if (info.event.url) {

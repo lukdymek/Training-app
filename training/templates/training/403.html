@@ -1,0 +1,37 @@
+{% extends "training/base.html" %}
+{% block title %}Access denied{% endblock %}
+
+{% block content %}
+  <div class="card" style="max-width:600px; margin:40px auto; text-align:center;">
+    <h1 style="margin-bottom:10px;">Access denied</h1>
+
+    <p class="help" style="margin-bottom:16px;">
+      You do not have permission to access this page.
+    </p>
+
+    <p class="help" style="margin-bottom:16px;">
+      You will be redirected automatically in
+      <strong><span id="countdown">10</span></strong> seconds.
+    </p>
+
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+      <button class="btn secondary" onclick="history.back()">Go back</button>
+      <a class="btn" href="{% url 'calendar' %}">Go to calendar</a>
+    </div>
+  </div>
+
+  <script>
+    let seconds = 10;
+    const el = document.getElementById("countdown");
+
+    const timer = setInterval(() => {
+      seconds--;
+      el.textContent = seconds;
+
+      if (seconds <= 0) {
+        clearInterval(timer);
+        window.location.href = "{% url 'calendar' %}";
+      }
+    }, 1000);
+  </script>
+{% endblock %}

@@ -145,3 +145,11 @@ textarea{min-height: 110px; resize: vertical}
 @media (max-width: 720px){
   .form-grid{grid-template-columns: 1fr}
 }
+
+.logout-link {
+  background:none;
+  border:none;
+  padding:0;
+  color:var(--link);
+  cursor:pointer;
+}

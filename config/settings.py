@@ -7,6 +7,9 @@ import os
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "calendar"   # where to send users after login
+LOGOUT_REDIRECT_URL = "login"
 
 if os.environ.get("RAILWAY_ENVIRONMENT") is None:
     try:

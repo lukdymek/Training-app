@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 from django.conf.urls.static import static
 from django.conf import settings
+from django.contrib.auth.views import LogoutView
+
 
 urlpatterns = [
     path("trainings/", views.training_list, name="training_list"),
@@ -35,9 +37,14 @@ urlpatterns = [
     path("api/trainers/", views.trainer_search_api, name="trainer_search_api"),
     path("recurring-training/", views.recurring_training, name="recurring_training"),
     path("api/recurring-training/", views.recurring_training_api, name="recurring_training_api"),
+    path("login/", views.login_view, name="login"),
+    path("logout/", LogoutView.as_view(), name="logout"),
+    path("my-history/", views.my_history, name="my_history"),
 
 
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+handler403 = "training.views.custom_403"
