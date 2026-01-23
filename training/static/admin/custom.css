@@ -1,0 +1,19 @@
+.admin-back-to-app {
+  margin-left: 12px;
+}
+
+.back-to-app-link {
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+
+  /* Use admin theme variables */
+  color: var(--body-fg);
+  background: var(--button-bg);
+  border: 1px solid var(--hairline-color);
+}
+
+.back-to-app-link:hover {
+  background: var(--button-hover-bg);
+}

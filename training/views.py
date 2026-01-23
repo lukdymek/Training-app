@@ -8,7 +8,7 @@ from django.utils.dateparse import parse_datetime
 from .forms import TrainingForm
 from django.db.models import Count, Q
 from django.utils.timezone import localtime
-from .models import Person, TrainerSkill, Subject, Participation, Training
+from .models import Person, TrainerSkill, Subject, Participation, Training, EmailVerification
 import csv
 from django.http import HttpResponse
 from django.db.models import Sum
@@ -36,8 +36,15 @@ from django.contrib.auth import authenticate, login, get_user_model
 from django.http import HttpResponseForbidden
 from functools import wraps
 from django.core.exceptions import PermissionDenied
+import random
+from django.contrib.auth.hashers import make_password
+from django.core.mail import send_mail
 
 
+
+
+CODE_TTL_MINUTES = 15
+RESEND_COOLDOWN_SECONDS = 60
 
 
 def staff_required(view_func):
@@ -1067,3 +1074,258 @@ def my_history(request):
 
 def custom_403(request, exception=None):
     return render(request, "403.html", status=403)
+
+def _send_verification_code(email: str) -> str:
+    """Generate and send a 6-digit code. Returns the code."""
+    code = f"{random.randint(0, 999999):06d}"
+
+    send_mail(
+        subject="Your Training App verification code",
+        message=(
+            f"Your verification code is: {code}\n\n"
+            f"It expires in {CODE_TTL_MINUTES} minutes."
+        ),
+        from_email=None,  # uses DEFAULT_FROM_EMAIL
+        recipient_list=[email],
+        fail_silently=False,
+    )
+    return code
+
+
+def register_request(request):
+    if request.method == "POST":
+        email = (request.POST.get("email") or "").strip().lower()
+
+        if not email or "@" not in email:
+            messages.error(request, "Please enter a valid email address.")
+            return redirect("register")
+
+        if not Person.objects.filter(email__iexact=email).exists():
+            messages.error(request, "This email address is not recognized. Please contact your administrator.")
+            return redirect("register")
+
+        # Cooldown: do not allow sending again within 60s
+        latest = EmailVerification.objects.filter(email=email).order_by("-created_at").first()
+        if latest:
+            delta = timezone.now() - latest.created_at
+            if delta.total_seconds() < RESEND_COOLDOWN_SECONDS:
+                wait = int(RESEND_COOLDOWN_SECONDS - delta.total_seconds())
+                messages.error(request, f"Please wait {wait} seconds before requesting another code.")
+                return redirect("register")
+
+        # Invalidate previous unused codes for this email (keeps DB tidy)
+        EmailVerification.objects.filter(email=email, used_at__isnull=True).update(used_at=timezone.now())
+
+        code = _send_verification_code(email)
+        EmailVerification.objects.create(email=email, code=code)
+
+        request.session["reg_email"] = email
+        request.session["reg_verified"] = False
+        request.session["reg_last_sent_at"] = timezone.now().isoformat()
+
+        messages.success(request, "Verification code sent. Please check your email.")
+        return redirect("register_verify")
+
+    return render(request, "training/register.html")
+
+
+def register_verify(request):
+    email = (request.session.get("reg_email") or "").strip().lower()
+    if not email:
+        return redirect("register")
+
+    if request.method == "POST":
+        code = (request.POST.get("code") or "").strip()
+
+        ev = EmailVerification.objects.filter(email=email, used_at__isnull=True).order_by("-created_at").first()
+        if not ev:
+            messages.error(request, "No active verification code found. Please request a new code.")
+            return redirect("register")
+
+        if ev.is_expired():
+            messages.error(request, "Verification code expired. Please request a new code.")
+            return redirect("register")
+
+        if code != ev.code:
+            messages.error(request, "Invalid code. Please try again.")
+            return redirect("register_verify")
+
+        ev.mark_used()
+        request.session["reg_verified"] = True
+        messages.success(request, "Code verified. Please set your password.")
+        return redirect("register_set_password")
+
+    # Pass cooldown remaining to template (nice UX)
+    remaining = 0
+    last_sent = request.session.get("reg_last_sent_at")
+    if last_sent:
+        try:
+            last_dt = timezone.datetime.fromisoformat(last_sent)
+            if timezone.is_naive(last_dt):
+                last_dt = timezone.make_aware(last_dt, timezone.get_current_timezone())
+            remaining = max(0, RESEND_COOLDOWN_SECONDS - int((timezone.now() - last_dt).total_seconds()))
+        except Exception:
+            remaining = 0
+
+    return render(request, "training/register_verify.html", {"email": email, "resend_remaining": remaining})
+
+
+def register_resend(request):
+    # Resend should be POST to avoid accidental triggers
+    if request.method != "POST":
+        return redirect("register_verify")
+
+    email = (request.session.get("reg_email") or "").strip().lower()
+    if not email:
+        return redirect("register")
+
+    # Cooldown check based on DB latest send
+    latest = EmailVerification.objects.filter(email=email).order_by("-created_at").first()
+    if latest:
+        delta = timezone.now() - latest.created_at
+        if delta.total_seconds() < RESEND_COOLDOWN_SECONDS:
+            wait = int(RESEND_COOLDOWN_SECONDS - delta.total_seconds())
+            messages.error(request, f"Please wait {wait} seconds before resending the code.")
+            return redirect("register_verify")
+
+    # Invalidate previous unused codes
+    EmailVerification.objects.filter(email=email, used_at__isnull=True).update(used_at=timezone.now())
+
+    code = _send_verification_code(email)
+    EmailVerification.objects.create(email=email, code=code)
+
+    request.session["reg_last_sent_at"] = timezone.now().isoformat()
+    messages.success(request, "A new verification code has been sent.")
+    return redirect("register_verify")
+
+
+def register_set_password(request):
+    email = (request.session.get("reg_email") or "").strip().lower()
+    verified = request.session.get("reg_verified") is True
+
+    if not email or not verified:
+        return redirect("register")
+
+    if request.method == "POST":
+        pw1 = request.POST.get("password1") or ""
+        pw2 = request.POST.get("password2") or ""
+
+        if len(pw1) < 8:
+            messages.error(request, "Password must be at least 8 characters.")
+            return redirect("register_set_password")
+
+        if pw1 != pw2:
+            messages.error(request, "Passwords do not match.")
+            return redirect("register_set_password")
+
+        User = get_user_model()
+
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            base = email.split("@")[0]
+            username = base
+            i = 1
+            while User.objects.filter(username=username).exists():
+                i += 1
+                username = f"{base}{i}"
+            user = User(username=username, email=email, is_active=True, is_staff=False, is_superuser=False)
+
+        user.password = make_password(pw1)
+        user.save()
+
+        # Cleanup session
+        for k in ("reg_email", "reg_verified", "reg_last_sent_at"):
+            request.session.pop(k, None)
+
+        messages.success(request, "Account created. You can now log in.")
+        return redirect("login")
+
+    return render(request, "training/register_set_password.html", {"email": email})
+
+@staff_required
+@login_required
+def training_finder(request):
+    """
+    Show people who completed a selected training subject.
+    Optional filters:
+      - contingent (from Person.contingent)
+      - category (from Person.category)
+    Sorting:
+      - sysper_id asc/desc
+    """
+    # Dropdown: training "type" (Subject)
+    subjects = Subject.objects.order_by("name")
+
+    # Read filters
+    subject_id = request.GET.get("subject_id") or ""
+    contingent = request.GET.get("contingent") or ""
+    category = request.GET.get("category") or ""
+    sort = (request.GET.get("sort") or "sysper_asc").strip().lower()
+
+    # Build distinct options from Person table (safe even if some are blank)
+    contingent_options = (
+        Person.objects.exclude(contingent__isnull=True).exclude(contingent="")
+        .values_list("contingent", flat=True).distinct().order_by("contingent")
+    )
+    category_options = (
+        Person.objects.exclude(category__isnull=True).exclude(category="")
+        .values_list("category", flat=True).distinct().order_by("category")
+    )
+
+    results = []
+    selected_subject = None
+
+    if subject_id:
+        try:
+            subject_id_int = int(subject_id)
+        except ValueError:
+            subject_id_int = None
+
+        if subject_id_int:
+            selected_subject = Subject.objects.filter(id=subject_id_int).first()
+
+        if selected_subject:
+            qs = (
+                Participation.objects
+                .filter(
+                    role="TRAINEE",
+                    training__subject=selected_subject,
+                    person__is_active=True,
+                )
+                .values(
+                    "person_id",
+                    "person__sysper_id",
+                    "person__first_name",
+                    "person__last_name",
+                    "person__email",
+                    "person__contingent",
+                    "person__category",
+                )
+                .annotate(last_completed=Max("training__end_at"))
+            )
+
+            if contingent:
+                qs = qs.filter(person__contingent=contingent)
+            if category:
+                qs = qs.filter(person__category=category)
+
+            # Sorting by sysper id
+            if sort == "sysper_desc":
+                qs = qs.order_by("-person__sysper_id")
+            else:
+                qs = qs.order_by("person__sysper_id")
+
+            # Convert to list + format dates
+            results = list(qs)
+
+    return render(request, "training/training_finder.html", {
+        "subjects": subjects,
+        "selected_subject": selected_subject,
+        "subject_id": subject_id,
+        "contingent": contingent,
+        "category": category,
+        "sort": sort,
+        "contingent_options": contingent_options,
+        "category_options": category_options,
+        "results": results,
+    })

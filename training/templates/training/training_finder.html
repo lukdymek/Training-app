@@ -1,0 +1,146 @@
+{% extends "training/base.html" %}
+{% block title %}Training Finder{% endblock %}
+
+{% block content %}
+  <style>
+    .row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      padding:12px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background: var(--input-bg);
+    }
+    .left{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+    }
+    .title{
+      font-weight:800;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 720px;
+    }
+    .meta{
+      color: var(--muted);
+      font-size: 13px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+    .pill{
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-size: 12px;
+      font-weight: 700;
+    }
+  </style>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h1 style="margin:0 0 6px;">Training Finder</h1>
+        <p class="help" style="margin:0;">Select a training and filter by contingent/category to find people who completed it.</p>
+      </div>
+    </div>
+
+    <form method="get" style="margin-top:14px;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+
+        <div class="form-row" style="min-width:240px;">
+          <label for="subject_id">Training</label>
+          <select id="subject_id" name="subject_id" required>
+            <option value="">-- choose --</option>
+            {% for s in subjects %}
+              <option value="{{ s.id }}" {% if subject_id|stringformat:"s" == s.id|stringformat:"s" %}selected{% endif %}>
+                {{ s.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-row" style="min-width:200px;">
+          <label for="contingent">Contingent</label>
+          <select id="contingent" name="contingent">
+            <option value="">All</option>
+            {% for c in contingent_options %}
+              <option value="{{ c }}" {% if contingent == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-row" style="min-width:200px;">
+          <label for="category">Category</label>
+          <select id="category" name="category">
+            <option value="">All</option>
+            {% for c in category_options %}
+              <option value="{{ c }}" {% if category == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-row" style="min-width:200px;">
+          <label for="sort">Sort by SYSPER ID</label>
+          <select id="sort" name="sort">
+            <option value="sysper_asc" {% if sort == "sysper_asc" %}selected{% endif %}>Ascending</option>
+            <option value="sysper_desc" {% if sort == "sysper_desc" %}selected{% endif %}>Descending</option>
+          </select>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+          <button class="btn" type="submit">Search</button>
+          <a class="btn secondary" href="{% url 'training_finder' %}">Reset</a>
+        </div>
+
+      </div>
+    </form>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    {% if selected_subject %}
+      <div style="margin-bottom:10px;" class="help">
+        Results for <strong>{{ selected_subject.name }}</strong>: <strong>{{ results|length }}</strong>
+      </div>
+    {% else %}
+      <div style="margin-bottom:10px;" class="help">
+        Choose a training to view results.
+      </div>
+    {% endif %}
+
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      {% for r in results %}
+        <div class="row">
+          <div class="left">
+            <div class="title">
+              {{ r.person__last_name }} {{ r.person__first_name }} — {{ r.person__sysper_id }}
+            </div>
+
+            <div class="meta">
+              {% if r.person__contingent %}<span class="pill">{{ r.person__contingent }}</span>{% endif %}
+              {% if r.person__category %}<span class="pill">{{ r.person__category }}</span>{% endif %}
+              {% if r.last_completed %}<span><strong>Last completed:</strong> {{ r.last_completed }}</span>{% endif %}
+              {% if r.person__email %}<span>{{ r.person__email }}</span>{% endif %}
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+            <a class="btn secondary small" href="/people/{{ r.person_id }}/history/">History</a>
+          </div>
+        </div>
+      {% empty %}
+        <div style="color:var(--muted);">No results.</div>
+      {% endfor %}
+    </div>
+  </div>
+{% endblock %}

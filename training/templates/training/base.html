@@ -26,6 +26,7 @@
         <a href="{% url 'people_list' %}">People</a>
         <a href="{% url 'trainer_list' %}">Trainers</a>
         <a href="{% url 'reports_home' %}">Reports</a>
+        <a href="{% url 'training_finder' %}">Training finder</a>
         {% endif %}
         {% if request.user.is_superuser %}
       <a href="/admin/">Admin</a>

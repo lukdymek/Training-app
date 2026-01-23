@@ -7,7 +7,9 @@ from psycopg.types.range import Range
 from django.db.models import Q
 from django.db.models.constraints import CheckConstraint
 from django.db.models import F
-
+from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
 
 class Person(models.Model):
     sysper_id = models.BigIntegerField(unique=True, db_index=True)
@@ -19,6 +21,7 @@ class Person(models.Model):
     gender = models.CharField(max_length=20, blank=True)
     category = models.CharField(max_length=50, blank=True)
     current_deployment = models.CharField(max_length=120, blank=True)
+    contingent = models.CharField(max_length=20, blank=True, default="")
     is_active = models.BooleanField(default=True)
 
 
@@ -124,3 +127,20 @@ class Participation(models.Model):
         self.timespan = Range(self.training.start_at, self.training.end_at, bounds='[)')
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class EmailVerification(models.Model):
+    email = models.EmailField(db_index=True)
+    code = models.CharField(max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def is_expired(self):
+        return self.created_at < timezone.now() - timedelta(minutes=15)
+
+    def mark_used(self):
+        self.used_at = timezone.now()
+        self.save(update_fields=["used_at"])
+
+    def __str__(self):
+        return f"{self.email} ({self.code})"

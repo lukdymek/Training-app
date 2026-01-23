@@ -40,6 +40,12 @@ urlpatterns = [
     path("login/", views.login_view, name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("my-history/", views.my_history, name="my_history"),
+    path("register/", views.register_request, name="register"),
+    path("register/verify/", views.register_verify, name="register_verify"),
+    path("register/resend/", views.register_resend, name="register_resend"),
+    path("register/set-password/", views.register_set_password, name="register_set_password"),
+    path("training-finder/", views.training_finder, name="training_finder"),
+
 
 
 ]

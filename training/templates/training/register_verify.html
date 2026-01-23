@@ -1,0 +1,60 @@
+{% extends "training/base.html" %}
+{% block title %}Verify{% endblock %}
+
+{% block content %}
+  <div class="card" style="max-width:520px; margin:0 auto;">
+    <h1 style="margin:0 0 10px;">Verify email</h1>
+    <p class="help" style="margin:0 0 14px;">
+      We sent a 6-digit code to <strong>{{ email }}</strong>.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="form-row">
+        <label for="id_code">Verification code</label>
+        <input id="id_code" name="code" type="text" inputmode="numeric" maxlength="6" placeholder="123456" required>
+      </div>
+
+      <div style="margin-top:14px;">
+        <button class="btn" style="width:100%; justify-content:center;" type="submit">Confirm code</button>
+      </div>
+    </form>
+
+    <div style="margin-top:14px; text-align:center;">
+      <form method="post" action="{% url 'register_resend' %}" style="display:inline;">
+        {% csrf_token %}
+        <button id="resendBtn" class="btn secondary small" type="submit">
+          Resend code
+        </button>
+      </form>
+
+      <div class="help" style="margin-top:10px;">
+        <span id="cooldownText"></span>
+      </div>
+
+      <div style="margin-top:10px;">
+        <a class="small-link" href="{% url 'register' %}">Use a different email</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let remaining = {{ resend_remaining|default:0 }};
+    const btn = document.getElementById("resendBtn");
+    const txt = document.getElementById("cooldownText");
+
+    function tick(){
+      if (remaining > 0){
+        btn.disabled = true;
+        txt.textContent = `You can resend in ${remaining}s.`;
+        remaining -= 1;
+        setTimeout(tick, 1000);
+      } else {
+        btn.disabled = false;
+        txt.textContent = "";
+      }
+    }
+    tick();
+  </script>
+{% endblock %}

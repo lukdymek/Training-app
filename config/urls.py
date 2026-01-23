@@ -22,6 +22,8 @@ admin.site.site_title = "Training App Admin"
 admin.site.index_title = "Administration"
 admin.site.site_url = "/calendar/"
 
+
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("training.urls")),
