@@ -1076,19 +1076,18 @@ def custom_403(request, exception=None):
     return render(request, "403.html", status=403)
 
 def _send_verification_code(email: str) -> str:
-    """Generate and send a 6-digit code. Returns the code."""
     code = f"{random.randint(0, 999999):06d}"
-
-    send_mail(
-        subject="Your Training App verification code",
-        message=(
-            f"Your verification code is: {code}\n\n"
-            f"It expires in {CODE_TTL_MINUTES} minutes."
-        ),
-        from_email=None,  # uses DEFAULT_FROM_EMAIL
-        recipient_list=[email],
-        fail_silently=False,
-    )
+    try:
+        send_mail(
+            subject="Your Training App verification code",
+            message=f"Your verification code is: {code}\n\nIt expires in 15 minutes.",
+            from_email=None,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+    except Exception:
+        # Don’t crash the request / worker
+        raise RuntimeError("Email sending failed. Please try again in a minute.")
     return code
 
 
@@ -1116,7 +1115,12 @@ def register_request(request):
         # Invalidate previous unused codes for this email (keeps DB tidy)
         EmailVerification.objects.filter(email=email, used_at__isnull=True).update(used_at=timezone.now())
 
-        code = _send_verification_code(email)
+        try:
+            code = _send_verification_code(email)
+        except RuntimeError as e:
+            messages.error(request, str(e))
+            return redirect("register")
+        
         EmailVerification.objects.create(email=email, code=code)
 
         request.session["reg_email"] = email
