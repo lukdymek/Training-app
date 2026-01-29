@@ -6,6 +6,8 @@ from pathlib import Path
 import os
 import dj_database_url
 
+
+
 ADMIN_CSS = "admin/custom.css"
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATICFILES_DIRS = [BASE_DIR / "static"]
@@ -13,22 +15,32 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "calendar"   # where to send users after login
 LOGOUT_REDIRECT_URL = "login"
 
-
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Training App <no-reply@yourdomain.com>")
-
-
 if os.environ.get("RAILWAY_ENVIRONMENT") is None:
     try:
         from dotenv import load_dotenv
         load_dotenv(BASE_DIR / ".env")
     except Exception:
         pass
+
+
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend"
+)
+
+if EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
+    EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+    EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+    EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+    EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+    EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
+    DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Training App <no-reply@yourdomain.com>")
+else:
+    DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Training App <no-reply@example.com>")
+
+
+
+
 
 # ------------------------------------------------------------------------------
 # ENVIRONMENT
