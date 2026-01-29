@@ -64,6 +64,26 @@
       .grid2{ grid-template-columns: 1fr; }
       .rowtitle{ max-width: 100%; }
     }
+
+    .status-select{
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    min-width: 130px;
+  }
+
+  /* Pill colors */
+  .status-authorised { background: #2ecc71; color: #fff; border-color: #2ecc71; } /* green */
+  .status-rejected   { background: #e74c3c; color: #fff; border-color: #e74c3c; } /* red */
+  .status-pending    { background: #f1c40f; color: #111; border-color: #f1c40f; } /* yellow */
+  .status-withdrawn  { background: #e67e22; color: #fff; border-color: #e67e22; } /* orange */
+
+  /* Keep option text readable in dropdown list */
+  .status-select option { color:#111; background:#fff; }
   </style>
 
   <div class="card">
@@ -130,6 +150,16 @@
           <div class="rowline">
             <div class="rowleft">
               <div class="rowtitle">{{ p.person.last_name|upper }} {{ p.person.first_name }}</div>
+              <select
+  class="status-select status-{{ p.status|lower }}"
+  data-url="{% url 'participation_set_status' p.id %}"
+  data-original="{{ p.status }}"
+>
+  <option value="AUTHORISED" {% if p.status == "AUTHORISED" %}selected{% endif %}>Authorised</option>
+  <option value="PENDING"    {% if p.status == "PENDING" %}selected{% endif %}>Pending</option>
+  <option value="REJECTED"   {% if p.status == "REJECTED" %}selected{% endif %}>Rejected</option>
+  <option value="WITHDRAWN"  {% if p.status == "WITHDRAWN" %}selected{% endif %}>Withdrawn</option>
+</select>
               <div class="rowsub">SYSPER ID: {{ p.person.sysper_id }}</div>
             </div>
 
@@ -191,6 +221,16 @@
           <div class="rowline">
             <div class="rowleft">
               <div class="rowtitle">{{ p.person.last_name|upper }} {{ p.person.first_name }}</div>
+              <select
+  class="status-select status-{{ p.status|lower }}"
+  data-url="{% url 'participation_set_status' p.id %}"
+  data-original="{{ p.status }}"
+>
+  <option value="AUTHORISED" {% if p.status == "AUTHORISED" %}selected{% endif %}>Authorised</option>
+  <option value="PENDING"    {% if p.status == "PENDING" %}selected{% endif %}>Pending</option>
+  <option value="REJECTED"   {% if p.status == "REJECTED" %}selected{% endif %}>Rejected</option>
+  <option value="WITHDRAWN"  {% if p.status == "WITHDRAWN" %}selected{% endif %}>Withdrawn</option>
+</select>
               <div class="rowsub">
                 SYSPER ID: {{ p.person.sysper_id }}
                 {% if p.days %}
@@ -298,6 +338,80 @@
         });
       }, 250));
     }
+
+
+    function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + "=")) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  function setStatusClass(selectEl, statusValue) {
+    const classes = ["status-authorised","status-pending","status-rejected","status-withdrawn"];
+    selectEl.classList.remove(...classes);
+    selectEl.classList.add("status-" + statusValue.toLowerCase());
+  }
+
+  async function updateParticipationStatus(selectEl) {
+    const url = selectEl.dataset.url;
+    const status = selectEl.value;
+    const original = selectEl.dataset.original || "";
+
+    // optimistic UI: update pill color immediately
+    setStatusClass(selectEl, status);
+
+    try {
+      const formData = new FormData();
+      formData.append("status", status);
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Request failed: " + res.status);
+      }
+
+      const data = await res.json();
+      if (!data.ok) {
+        throw new Error(data.error || "Unknown error");
+      }
+
+      // server confirms; store as new original
+      selectEl.dataset.original = data.status;
+      setStatusClass(selectEl, data.status);
+
+    } catch (err) {
+      // revert UI on failure
+      if (original) {
+        selectEl.value = original;
+        setStatusClass(selectEl, original);
+      }
+      alert("Could not update status. Please try again.");
+      console.error(err);
+    }
+  }
+
+  document.addEventListener("change", function(e) {
+    const el = e.target;
+    if (el && el.classList.contains("status-select")) {
+      updateParticipationStatus(el);
+    }
+  });
   </script>
 
 {% endblock %}

@@ -33,12 +33,13 @@ from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.db.models import Max
 from django.contrib.auth import authenticate, login, get_user_model
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, HttpResponseBadRequest
 from functools import wraps
 from django.core.exceptions import PermissionDenied
 import random
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
+
 
 
 
@@ -1333,3 +1334,23 @@ def training_finder(request):
         "category_options": category_options,
         "results": results,
     })
+
+@require_POST
+@login_required
+def participation_set_status(request, participation_id):
+    # If you want only advanced/admin to edit, keep this:
+    if not request.user.is_staff:
+        return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
+
+    p = get_object_or_404(Participation, id=participation_id)
+
+    new_status = (request.POST.get("status") or "").strip().upper()
+    allowed = {"AUTHORISED", "PENDING", "REJECTED", "WITHDRAWN"}
+
+    if new_status not in allowed:
+        return JsonResponse({"ok": False, "error": "invalid_status"}, status=400)
+
+    p.status = new_status
+    p.save(update_fields=["status"])
+
+    return JsonResponse({"ok": True, "status": p.status})

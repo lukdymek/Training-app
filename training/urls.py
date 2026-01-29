@@ -45,6 +45,7 @@ urlpatterns = [
     path("register/resend/", views.register_resend, name="register_resend"),
     path("register/set-password/", views.register_set_password, name="register_set_password"),
     path("training-finder/", views.training_finder, name="training_finder"),
+    path("participation/<int:participation_id>/status/", views.participation_set_status, name="participation_set_status"),
 
 
 

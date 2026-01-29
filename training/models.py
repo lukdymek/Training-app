@@ -11,6 +11,7 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 
+
 class Person(models.Model):
     sysper_id = models.BigIntegerField(unique=True, db_index=True)
     first_name = models.CharField(max_length=80)
@@ -77,9 +78,22 @@ class Participation(models.Model):
         ("TRAINER", "Trainer"),
     ]
 
+    STATUS_CHOICES = (
+        ("AUTHORISED", "Authorised"),
+        ("PENDING", "Pending"),
+        ("REJECTED", "Rejected"),
+        ("WITHDRAWN", "Withdrawn"),
+    )
+
     person = models.ForeignKey("Person", on_delete=models.CASCADE)
     training = models.ForeignKey("Training", on_delete=models.CASCADE)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    status = models.CharField(
+        max_length=12,
+        choices=STATUS_CHOICES,
+        default="PENDING",
+        db_index=True,
+    )
     days = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     timespan = DateTimeRangeField(null=True, blank=True)
 
