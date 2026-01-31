@@ -66,24 +66,31 @@
     }
 
     .status-select{
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: var(--card);
-    font-weight: 700;
-    font-size: 12px;
-    cursor: pointer;
-    min-width: 130px;
-  }
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      width: 140px;
+      text-align: center;
+    }
 
-  /* Pill colors */
-  .status-authorised { background: #2ecc71; color: #fff; border-color: #2ecc71; } /* green */
-  .status-rejected   { background: #e74c3c; color: #fff; border-color: #e74c3c; } /* red */
-  .status-pending    { background: #f1c40f; color: #111; border-color: #f1c40f; } /* yellow */
-  .status-withdrawn  { background: #e67e22; color: #fff; border-color: #e67e22; } /* orange */
+    /* Pill colors */
+    .status-authorised { background: #2ecc71; color: #fff; border-color: #2ecc71; }
+    .status-rejected   { background: #e74c3c; color: #fff; border-color: #e74c3c; }
+    .status-pending    { background: #f1c40f; color: #111; border-color: #f1c40f; }
+    .status-withdrawn  { background: #e67e22; color: #fff; border-color: #e67e22; }
 
-  /* Keep option text readable in dropdown list */
-  .status-select option { color:#111; background:#fff; }
+    .status-select option { color:#111; background:#fff; }
+
+    .auditline{
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+      line-height: 1.2;
+    }
   </style>
 
   <div class="card">
@@ -150,20 +157,34 @@
           <div class="rowline">
             <div class="rowleft">
               <div class="rowtitle">{{ p.person.last_name|upper }} {{ p.person.first_name }}</div>
+
               <select
-  class="status-select status-{{ p.status|lower }}"
-  data-url="{% url 'participation_set_status' p.id %}"
-  data-original="{{ p.status }}"
->
-  <option value="AUTHORISED" {% if p.status == "AUTHORISED" %}selected{% endif %}>Authorised</option>
-  <option value="PENDING"    {% if p.status == "PENDING" %}selected{% endif %}>Pending</option>
-  <option value="REJECTED"   {% if p.status == "REJECTED" %}selected{% endif %}>Rejected</option>
-  <option value="WITHDRAWN"  {% if p.status == "WITHDRAWN" %}selected{% endif %}>Withdrawn</option>
-</select>
+                class="status-select status-{{ p.status|lower }}"
+                data-url="{% url 'participation_set_status' p.id %}"
+                data-original="{{ p.status }}"
+                data-pid="{{ p.id }}"
+              >
+                <option value="AUTHORISED" {% if p.status == "AUTHORISED" %}selected{% endif %}>Authorised</option>
+                <option value="PENDING"    {% if p.status == "PENDING" %}selected{% endif %}>Pending</option>
+                <option value="REJECTED"   {% if p.status == "REJECTED" %}selected{% endif %}>Rejected</option>
+                <option value="WITHDRAWN"  {% if p.status == "WITHDRAWN" %}selected{% endif %}>Withdrawn</option>
+              </select>
+
+              <div class="auditline status-audit" data-audit-for="{{ p.id }}"
+                   {% if not p.status_changed_at %}style="display:none;"{% endif %}>
+                {% if p.status_changed_at %}
+                  {{ p.get_status_display }} on {{ p.status_changed_at|date:"d/m/Y H:i" }}
+                  {% if p.status_changed_by %}
+                    by {{ p.status_changed_by.get_full_name|default:p.status_changed_by.username }}
+                  {% endif %}
+                {% endif %}
+              </div>
+
               <div class="rowsub">SYSPER ID: {{ p.person.sysper_id }}</div>
             </div>
 
             <div class="rowactions">
+              <a class="btn secondary small" href="{% url 'participation_edit' p.id %}">Edit</a>
               <a class="btn secondary small" href="{% url 'person_history' p.person.id %}">History</a>
 
               <form method="post" action="{% url 'remove_participation' training.pk p.id %}" class="inlineform">
@@ -217,20 +238,33 @@
       <div style="height:12px;"></div>
 
       <div style="display:flex; flex-direction:column; gap:10px;">
-       {% for p in trainers %}
+        {% for p in trainers %}
           <div class="rowline">
             <div class="rowleft">
               <div class="rowtitle">{{ p.person.last_name|upper }} {{ p.person.first_name }}</div>
+
               <select
-  class="status-select status-{{ p.status|lower }}"
-  data-url="{% url 'participation_set_status' p.id %}"
-  data-original="{{ p.status }}"
->
-  <option value="AUTHORISED" {% if p.status == "AUTHORISED" %}selected{% endif %}>Authorised</option>
-  <option value="PENDING"    {% if p.status == "PENDING" %}selected{% endif %}>Pending</option>
-  <option value="REJECTED"   {% if p.status == "REJECTED" %}selected{% endif %}>Rejected</option>
-  <option value="WITHDRAWN"  {% if p.status == "WITHDRAWN" %}selected{% endif %}>Withdrawn</option>
-</select>
+                class="status-select status-{{ p.status|lower }}"
+                data-url="{% url 'participation_set_status' p.id %}"
+                data-original="{{ p.status }}"
+                data-pid="{{ p.id }}"
+              >
+                <option value="AUTHORISED" {% if p.status == "AUTHORISED" %}selected{% endif %}>Authorised</option>
+                <option value="PENDING"    {% if p.status == "PENDING" %}selected{% endif %}>Pending</option>
+                <option value="REJECTED"   {% if p.status == "REJECTED" %}selected{% endif %}>Rejected</option>
+                <option value="WITHDRAWN"  {% if p.status == "WITHDRAWN" %}selected{% endif %}>Withdrawn</option>
+              </select>
+
+              <div class="auditline status-audit" data-audit-for="{{ p.id }}"
+                   {% if not p.status_changed_at %}style="display:none;"{% endif %}>
+                {% if p.status_changed_at %}
+                  {{ p.get_status_display }} on {{ p.status_changed_at|date:"d/m/Y H:i" }}
+                  {% if p.status_changed_by %}
+                    by {{ p.status_changed_by.get_full_name|default:p.status_changed_by.username }}
+                  {% endif %}
+                {% endif %}
+              </div>
+
               <div class="rowsub">
                 SYSPER ID: {{ p.person.sysper_id }}
                 {% if p.days %}
@@ -242,8 +276,10 @@
             </div>
 
             <div class="rowactions">
-              <!-- ✅ Edit days -->
-              <form method="post" action="{% url 'update_trainer_days' training.pk p.id %}" class="inlineform" style="display:flex; gap:8px; align-items:center;">
+              <a class="btn secondary small" href="{% url 'participation_edit' p.id %}">Edit</a>
+
+              <form method="post" action="{% url 'update_trainer_days' training.pk p.id %}"
+                    class="inlineform" style="display:flex; gap:8px; align-items:center;">
                 {% csrf_token %}
                 <input
                   type="number"
@@ -272,7 +308,6 @@
         {% empty %}
           <div style="color:var(--muted);">No trainers yet.</div>
         {% endfor %}
-
       </div>
     </div>
   </div>
@@ -339,79 +374,87 @@
       }, 250));
     }
 
-
     function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== "") {
-      const cookies = document.cookie.split(";");
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + "=")) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + "=")) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
         }
       }
+      return cookieValue;
     }
-    return cookieValue;
-  }
 
-  function setStatusClass(selectEl, statusValue) {
-    const classes = ["status-authorised","status-pending","status-rejected","status-withdrawn"];
-    selectEl.classList.remove(...classes);
-    selectEl.classList.add("status-" + statusValue.toLowerCase());
-  }
-
-  async function updateParticipationStatus(selectEl) {
-    const url = selectEl.dataset.url;
-    const status = selectEl.value;
-    const original = selectEl.dataset.original || "";
-
-    // optimistic UI: update pill color immediately
-    setStatusClass(selectEl, status);
-
-    try {
-      const formData = new FormData();
-      formData.append("status", status);
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "X-CSRFToken": getCookie("csrftoken"),
-          "X-Requested-With": "XMLHttpRequest",
-        },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        throw new Error("Request failed: " + res.status);
-      }
-
-      const data = await res.json();
-      if (!data.ok) {
-        throw new Error(data.error || "Unknown error");
-      }
-
-      // server confirms; store as new original
-      selectEl.dataset.original = data.status;
-      setStatusClass(selectEl, data.status);
-
-    } catch (err) {
-      // revert UI on failure
-      if (original) {
-        selectEl.value = original;
-        setStatusClass(selectEl, original);
-      }
-      alert("Could not update status. Please try again.");
-      console.error(err);
+    function setStatusClass(selectEl, statusValue) {
+      const classes = ["status-authorised","status-pending","status-rejected","status-withdrawn"];
+      selectEl.classList.remove(...classes);
+      selectEl.classList.add("status-" + statusValue.toLowerCase());
     }
-  }
 
-  document.addEventListener("change", function(e) {
-    const el = e.target;
-    if (el && el.classList.contains("status-select")) {
-      updateParticipationStatus(el);
+    async function updateParticipationStatus(selectEl) {
+      const url = selectEl.dataset.url;
+      const status = selectEl.value;
+      const original = selectEl.dataset.original || "";
+      const pid = selectEl.dataset.pid;
+
+      setStatusClass(selectEl, status);
+
+      try {
+        const formData = new FormData();
+        formData.append("status", status);
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken"),
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          body: formData,
+        });
+
+        if (!res.ok) throw new Error("Request failed: " + res.status);
+
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Unknown error");
+
+        selectEl.dataset.original = data.status;
+        setStatusClass(selectEl, data.status);
+
+        // update audit line below dropdown
+        const auditEl = document.querySelector(`.status-audit[data-audit-for="${pid}"]`);
+        if (auditEl) {
+          auditEl.style.display = "block";
+          // Use display string from backend if you want; for now use status label + server timestamp + name
+          const labelMap = {
+            "AUTHORISED": "Authorised",
+            "PENDING": "Pending",
+            "REJECTED": "Rejected",
+            "WITHDRAWN": "Withdrawn"
+          };
+          const label = labelMap[data.status] || data.status;
+          auditEl.textContent = `${label} on ${data.changed_at} by ${data.changed_by}`;
+        }
+
+      } catch (err) {
+        if (original) {
+          selectEl.value = original;
+          setStatusClass(selectEl, original);
+        }
+        alert("Could not update status. Please try again.");
+        console.error(err);
+      }
     }
-  });
+
+    document.addEventListener("change", function(e) {
+      const el = e.target;
+      if (el && el.classList.contains("status-select")) {
+        updateParticipationStatus(el);
+      }
+    });
   </script>
 
 {% endblock %}

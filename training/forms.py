@@ -78,3 +78,14 @@ class AddMultipleTrainersForm(forms.Form):
             super().__init__(*args, **kwargs)
             if queryset is not None:
                 self.fields["trainers"].queryset = queryset
+
+
+class ParticipationEditForm(forms.ModelForm):
+    class Meta:
+        model = Participation
+        fields = ["status_comment", "completion_status", "feedback", "pos_comment"]
+        widgets = {
+            "status_comment": forms.Textarea(attrs={"rows": 3}),
+            "feedback": forms.Textarea(attrs={"rows": 3}),
+            "pos_comment": forms.Textarea(attrs={"rows": 3}),
+        }

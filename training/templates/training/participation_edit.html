@@ -1,0 +1,45 @@
+{% extends "training/base.html" %}
+{% block title %}Edit participation{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h1 style="margin-top:0;">Edit participation</h1>
+
+    <p class="help" style="margin-top:0;">
+      <strong>{{ p.person.last_name }} {{ p.person.first_name }}</strong>
+      (SYSPER ID: {{ p.person.sysper_id }})<br>
+      Training: <strong>{{ p.training.course_name }}</strong>
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="grid" style="display:grid; gap:12px; max-width:720px;">
+        <div class="form-row">
+          <label>Status comment (why)</label>
+          {{ form.status_comment }}
+        </div>
+
+        <div class="form-row">
+          <label>Completion status</label>
+          {{ form.completion_status }}
+        </div>
+
+        <div class="form-row">
+          <label>Feedback</label>
+          {{ form.feedback }}
+        </div>
+
+        <div class="form-row">
+          <label>POS comment</label>
+          {{ form.pos_comment }}
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button class="btn" type="submit">Save</button>
+        <a class="btn secondary" href="{% url 'training_detail' p.training_id %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

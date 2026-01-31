@@ -39,6 +39,8 @@ from django.core.exceptions import PermissionDenied
 import random
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
+from django.utils import timezone
+from .forms import ParticipationEditForm
 
 
 
@@ -1338,7 +1340,6 @@ def training_finder(request):
 @require_POST
 @login_required
 def participation_set_status(request, participation_id):
-    # If you want only advanced/admin to edit, keep this:
     if not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
 
@@ -1346,11 +1347,43 @@ def participation_set_status(request, participation_id):
 
     new_status = (request.POST.get("status") or "").strip().upper()
     allowed = {"AUTHORISED", "PENDING", "REJECTED", "WITHDRAWN"}
-
     if new_status not in allowed:
         return JsonResponse({"ok": False, "error": "invalid_status"}, status=400)
 
-    p.status = new_status
-    p.save(update_fields=["status"])
+    # Only update audit if status actually changed
+    if p.status != new_status:
+        p.status = new_status
+        p.status_changed_at = timezone.now()
+        p.status_changed_by = request.user
+        p.save(update_fields=["status", "status_changed_at", "status_changed_by"])
 
-    return JsonResponse({"ok": True, "status": p.status})
+    # Return info to show under the dropdown
+    who = request.user.get_full_name().strip() or request.user.get_username()
+    ts = timezone.localtime(p.status_changed_at).strftime("%d/%m/%Y %H:%M") if p.status_changed_at else ""
+
+    return JsonResponse({"ok": True, "status": p.status, "changed_at": ts, "changed_by": who})
+
+@login_required
+def participation_edit(request, participation_id):
+    if not request.user.is_staff:
+        return render(request, "training/forbidden_nice.html", status=403)
+
+    p = get_object_or_404(Participation, id=participation_id)
+
+    if request.method == "POST":
+        form = ParticipationEditForm(request.POST, instance=p)
+        if form.is_valid():
+            obj = form.save(commit=False)
+
+            # If they typed a comment, update audit fields too (optional but helpful)
+            if obj.status_comment.strip():
+                obj.status_changed_at = obj.status_changed_at or timezone.now()
+                obj.status_changed_by = obj.status_changed_by or request.user
+
+            obj.save()
+            messages.success(request, "Participation updated.")
+            return redirect("training_detail", pk=p.training_id)
+    else:
+        form = ParticipationEditForm(instance=p)
+
+    return render(request, "training/participation_edit.html", {"p": p, "form": form})

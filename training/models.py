@@ -84,7 +84,7 @@ class Participation(models.Model):
         ("REJECTED", "Rejected"),
         ("WITHDRAWN", "Withdrawn"),
     )
-
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="PENDING", db_index=True)
     person = models.ForeignKey("Person", on_delete=models.CASCADE)
     training = models.ForeignKey("Training", on_delete=models.CASCADE)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
@@ -96,6 +96,23 @@ class Participation(models.Model):
     )
     days = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     timespan = DateTimeRangeField(null=True, blank=True)
+
+    # ---- Audit fields for status changes ----
+    status_changed_at = models.DateTimeField(null=True, blank=True)
+    status_changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="status_changes"
+    )
+    status_comment = models.TextField(blank=True, default="")   # "why changed"
+
+    # ---- POS section ----
+    COMPLETION_CHOICES = (
+        ("", "—"),
+        ("PASS", "Pass"),
+        ("FAIL", "Fail"),
+    )
+    completion_status = models.CharField(max_length=10, choices=COMPLETION_CHOICES, blank=True, default="")
+    feedback = models.TextField(blank=True, default="")
+    pos_comment = models.TextField(blank=True, default="")
 
     class Meta:
         unique_together = [("person", "training", "role")]
