@@ -41,7 +41,10 @@ from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.utils import timezone
 from .forms import ParticipationEditForm
-
+import re
+from django.forms import modelformset_factory
+from .models import UseOfForceStandard
+from .forms import UseOfForceStandardForm
 
 
 
@@ -1387,3 +1390,119 @@ def participation_edit(request, participation_id):
         form = ParticipationEditForm(instance=p)
 
     return render(request, "training/participation_edit.html", {"p": p, "form": form})
+
+def _ensure_uof_defaults_exist():
+    for ex, _ in UseOfForceStandard.EXERCISE_CHOICES:
+        for ag, _ in UseOfForceStandard.AGE_GROUP_CHOICES:
+            UseOfForceStandard.objects.get_or_create(
+                exercise=ex,
+                age_group=ag,
+                defaults={
+                    "age_sort": UseOfForceStandard.AGE_SORT.get(ag, 999),
+                    "minimum": 0,
+                    "good": 0,
+                    "very_good": 0,
+                },
+            )
+
+
+
+
+@login_required
+def uof_standards(request):
+    _ensure_uof_defaults_exist()
+
+    grouped = []
+    exercise_labels = dict(UseOfForceStandard.EXERCISE_CHOICES)
+
+    # Build data for template (GET + POST)
+    for ex_key, ex_label in UseOfForceStandard.EXERCISE_CHOICES:
+        rows = list(
+            UseOfForceStandard.objects.filter(exercise=ex_key).order_by("age_sort")
+        )
+
+        # ✅ Add MM:SS display values for RUN rows
+        if ex_key == UseOfForceStandard.EXERCISE_RUN:
+            for r in rows:
+                r.minimum_mmss = seconds_to_mmss(r.minimum)
+                r.good_mmss = seconds_to_mmss(r.good)
+                r.very_good_mmss = seconds_to_mmss(r.very_good)
+
+        grouped.append({
+            "exercise_key": ex_key,
+            "exercise_label": ex_label,
+            "rows": rows,
+        })
+
+    if request.method == "POST":
+        updated = 0
+
+        for block in grouped:
+            is_run = (block["exercise_key"] == UseOfForceStandard.EXERCISE_RUN)
+
+            for row in block["rows"]:
+                min_val = request.POST.get(f"min_{row.id}", "").strip()
+                good_val = request.POST.get(f"good_{row.id}", "").strip()
+                vg_val = request.POST.get(f"vg_{row.id}", "").strip()
+
+                try:
+                    if is_run:
+                        row.minimum = mmss_to_seconds(min_val)
+                        row.good = mmss_to_seconds(good_val)
+                        row.very_good = mmss_to_seconds(vg_val)
+                    else:
+                        row.minimum = int(min_val or 0)
+                        row.good = int(good_val or 0)
+                        row.very_good = int(vg_val or 0)
+
+                    row.save(update_fields=["minimum", "good", "very_good"])
+                    updated += 1
+
+                except ValueError as e:
+                    messages.error(
+                        request,
+                        f"{block['exercise_label']} / {row.get_age_group_display()}: {e}"
+                    )
+                    return redirect("uof_standards")
+
+        messages.success(request, f"Saved {updated} rows.")
+        return redirect("uof_standards")
+
+    return render(request, "training/uof_standards.html", {
+        "grouped": grouped,
+        "exercise_labels": exercise_labels,
+    })
+
+def mmss_to_seconds(value: str) -> int:
+    """
+    Accepts:
+      - "4:20" or "04:20"
+      - "260" (treated as seconds)
+      - "" -> 0
+    Returns integer seconds.
+    """
+    v = (value or "").strip()
+    if not v:
+        return 0
+
+    # plain integer seconds
+    if v.isdigit():
+        return int(v)
+
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", v)
+    if not m:
+        raise ValueError("Time must be in MM:SS format (e.g. 04:20).")
+
+    minutes = int(m.group(1))
+    seconds = int(m.group(2))
+    if seconds >= 60:
+        raise ValueError("Seconds must be < 60 (MM:SS).")
+
+    return minutes * 60 + seconds
+
+
+def seconds_to_mmss(seconds: int) -> str:
+    s = int(seconds or 0)
+    m = s // 60
+    sec = s % 60
+    return f"{m:02d}:{sec:02d}"

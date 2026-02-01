@@ -175,3 +175,71 @@ class EmailVerification(models.Model):
 
     def __str__(self):
         return f"{self.email} ({self.code})"
+    
+
+
+
+
+
+class UseOfForceStandard(models.Model):
+
+    EXERCISE_PUSHUPS = "PUSHUPS"
+    EXERCISE_SITUPS = "SITUPS"
+    EXERCISE_RUN = "RUN"
+
+    EXERCISE_CHOICES = [
+        (EXERCISE_PUSHUPS, "Push-ups"),
+        (EXERCISE_SITUPS, "Sit-ups"),
+        (EXERCISE_RUN, "1000m run"),
+    ]
+
+    AGE_UNDER_30 = "U29"
+    AGE_30_34 = "30_34"
+    AGE_35_39 = "35_39"
+    AGE_40_44 = "40_44"
+    AGE_45_49 = "45_49"
+    AGE_50_54 = "50_54"
+    AGE_55_59 = "55_59"
+    AGE_60_PLUS = "60_PLUS"
+
+    AGE_GROUP_CHOICES = [
+        (AGE_UNDER_30, "Up to 29"),
+        (AGE_30_34, "30–34"),
+        (AGE_35_39, "35–39"),
+        (AGE_40_44, "40–44"),
+        (AGE_45_49, "45–49"),
+        (AGE_50_54, "50–54"),
+        (AGE_55_59, "55–59"),
+        (AGE_60_PLUS, "60 and over"),
+    ]
+
+    AGE_SORT = {
+        AGE_UNDER_30: 1,
+        AGE_30_34: 2,
+        AGE_35_39: 3,
+        AGE_40_44: 4,
+        AGE_45_49: 5,
+        AGE_50_54: 6,
+        AGE_55_59: 7,
+        AGE_60_PLUS: 8,
+    }
+
+    exercise = models.CharField(max_length=20, choices=EXERCISE_CHOICES)
+    age_group = models.CharField(max_length=20, choices=AGE_GROUP_CHOICES)
+
+    age_sort = models.PositiveSmallIntegerField()
+
+
+
+    minimum = models.IntegerField()
+    good = models.IntegerField()
+    very_good = models.IntegerField()
+
+    def save(self, *args, **kwargs):
+        if self.age_sort is None:
+            self.age_sort = self.AGE_SORT.get(self.age_group, 999)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ["exercise", "age_sort"]
+        unique_together = ("exercise", "age_group")

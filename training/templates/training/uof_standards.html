@@ -1,0 +1,120 @@
+{% extends "training/base.html" %}
+{% block title %}Use of Force standards{% endblock %}
+
+{% block content %}
+  <style>
+    table.uof {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    table.uof th, table.uof td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      vertical-align: top;
+    }
+    table.uof th {
+      background: var(--input-bg);
+      text-align: left;
+      font-weight: 800;
+    }
+    .uof-section-title{
+      margin: 18px 0 6px;
+      font-weight: 900;
+    }
+    .uof-input{
+      width: 110px;
+      max-width: 100%;
+    }
+    .uof-age{
+      white-space: nowrap;
+      font-weight: 700;
+    }
+  </style>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+      <div>
+        <h1 style="margin:0 0 6px;">Use of Force standards</h1>
+        <p class="help" style="margin:0;">
+          Edit the required results by age group.
+          For <strong>1000m run</strong>, enter time as <strong>MM:SS</strong> (e.g. 04:20).
+        </p>
+      </div>
+      <div>
+        <a class="btn secondary" href="{% url 'calendar' %}">Back</a>
+      </div>
+    </div>
+
+    {% if messages %}
+      <div style="margin-top:14px;">
+        {% for message in messages %}
+          <div style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background: var(--card); margin-bottom:10px;">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <div class="card">
+      <div class="help" style="margin-bottom:10px;">
+        Tip: Push-ups/Sit-ups improve with higher numbers (Minimum ≤ Good ≤ Very good).<br>
+        Run improves with smaller time (Minimum ≥ Good ≥ Very good).
+      </div>
+
+      {% for block in grouped %}
+        <div class="uof-section-title">{{ block.exercise_label }}</div>
+
+        <table class="uof">
+          <thead>
+            <tr>
+              <th style="width:220px;">Age group</th>
+              <th>Minimum</th>
+              <th>Good</th>
+              <th>Very good</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in block.rows %}
+              <tr>
+                <td class="uof-age">{{ row.get_age_group_display }}</td>
+
+                {% if block.exercise_key == "RUN" %}
+                  <td>
+                    <input class="uof-input" type="text" name="min_{{ row.id }}" value="{{ row.minimum_mmss }}" placeholder="MM:SS">
+                  </td>
+                  <td>
+                    <input class="uof-input" type="text" name="good_{{ row.id }}" value="{{ row.good_mmss }}" placeholder="MM:SS">
+                  </td>
+                  <td>
+                    <input class="uof-input" type="text" name="vg_{{ row.id }}" value="{{ row.very_good_mmss }}" placeholder="MM:SS">
+                  </td>
+                {% else %}
+                  <td>
+                    <input class="uof-input" type="number" min="0" step="1" name="min_{{ row.id }}" value="{{ row.minimum }}">
+                  </td>
+                  <td>
+                    <input class="uof-input" type="number" min="0" step="1" name="good_{{ row.id }}" value="{{ row.good }}">
+                  </td>
+                  <td>
+                    <input class="uof-input" type="number" min="0" step="1" name="vg_{{ row.id }}" value="{{ row.very_good }}">
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endfor %}
+
+      <div style="margin-top:14px; display:flex; gap:10px;">
+        <button class="btn" type="submit">Save changes</button>
+      </div>
+    </div>
+  </form>
+{% endblock %}

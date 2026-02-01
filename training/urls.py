@@ -47,6 +47,8 @@ urlpatterns = [
     path("training-finder/", views.training_finder, name="training_finder"),
     path("participation/<int:participation_id>/status/", views.participation_set_status, name="participation_set_status"),
     path("participation/<int:participation_id>/edit/", views.participation_edit, name="participation_edit"),
+    path("uof-standards/", views.uof_standards, name="uof_standards"),
+
 
 
 

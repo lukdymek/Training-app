@@ -5,7 +5,7 @@ from django.db.models import Q
 from psycopg.types.range import Range
 from .models import Training, Participation
 from .models import Person
-
+from .models import UseOfForceStandard
 
 class TrainingForm(forms.ModelForm):
     class Meta:
@@ -89,3 +89,105 @@ class ParticipationEditForm(forms.ModelForm):
             "feedback": forms.Textarea(attrs={"rows": 3}),
             "pos_comment": forms.Textarea(attrs={"rows": 3}),
         }
+
+
+def mmss_to_seconds(value: str) -> int:
+    value = (value or "").strip()
+    if not value:
+        raise forms.ValidationError("This field is required.")
+    if ":" not in value:
+        raise forms.ValidationError("Use MM:SS format, e.g. 04:20")
+
+    mm, ss = value.split(":", 1)
+    if not (mm.isdigit() and ss.isdigit()):
+        raise forms.ValidationError("Use MM:SS format, e.g. 04:20")
+
+    mm = int(mm)
+    ss = int(ss)
+    if ss < 0 or ss > 59:
+        raise forms.ValidationError("Seconds must be 00–59")
+
+    return mm * 60 + ss
+
+
+def seconds_to_mmss(seconds: int) -> str:
+    if seconds is None:
+        return ""
+    mm = seconds // 60
+    ss = seconds % 60
+    return f"{mm:02d}:{ss:02d}"
+
+
+class UseOfForceStandardForm(forms.ModelForm):
+    # we override fields so we can accept MM:SS for run
+    minimum_display = forms.CharField(required=True)
+    good_display = forms.CharField(required=True)
+    very_good_display = forms.CharField(required=True)
+
+    class Meta:
+        model = UseOfForceStandard
+        fields = []  # handled manually
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        inst = self.instance
+        if inst and inst.pk:
+            if inst.exercise == UseOfForceStandard.EXERCISE_RUN:
+
+                self.fields["minimum_display"].initial = seconds_to_mmss(inst.minimum)
+                self.fields["good_display"].initial = seconds_to_mmss(inst.good)
+                self.fields["very_good_display"].initial = seconds_to_mmss(inst.very_good)
+            else:
+                self.fields["minimum_display"].initial = str(inst.minimum)
+                self.fields["good_display"].initial = str(inst.good)
+                self.fields["very_good_display"].initial = str(inst.very_good)
+
+    def clean(self):
+        cleaned = super().clean()
+        inst = self.instance
+
+        min_v = cleaned.get("minimum_display")
+        good_v = cleaned.get("good_display")
+        vg_v = cleaned.get("very_good_display")
+
+        if inst.exercise == UseOfForceStandard.EXERCISE_RUN:
+            # for run, smaller time is better
+            minimum = mmss_to_seconds(min_v)
+            good = mmss_to_seconds(good_v)
+            very_good = mmss_to_seconds(vg_v)
+
+            # sanity: minimum >= good >= very_good (because minimum is worst/slowest)
+            if not (minimum >= good >= very_good):
+                raise forms.ValidationError("For 1000m run: Minimum should be the slowest, Very good the fastest (e.g. 06:00 >= 05:00 >= 04:20).")
+
+            inst.minimum = minimum
+            inst.good = good
+            inst.very_good = very_good
+
+        else:
+            # reps: bigger is better
+            try:
+                minimum = int(min_v)
+                good = int(good_v)
+                very_good = int(vg_v)
+            except Exception:
+                raise forms.ValidationError("For repetitions, enter whole numbers.")
+
+            if minimum < 0 or good < 0 or very_good < 0:
+                raise forms.ValidationError("Values must be positive.")
+
+            if not (minimum <= good <= very_good):
+                raise forms.ValidationError("For repetitions: Minimum ≤ Good ≤ Very good.")
+
+            inst.minimum = minimum
+            inst.good = good
+            inst.very_good = very_good
+
+        return cleaned
+
+    def save(self, commit=True):
+        # instance fields already set in clean()
+        if commit:
+            self.instance.save()
+        return self.instance
