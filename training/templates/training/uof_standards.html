@@ -3,33 +3,15 @@
 
 {% block content %}
   <style>
-    table.uof {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    table.uof th, table.uof td {
-      border: 1px solid var(--border);
-      padding: 8px 10px;
-      vertical-align: top;
-    }
-    table.uof th {
-      background: var(--input-bg);
-      text-align: left;
-      font-weight: 800;
-    }
-    .uof-section-title{
-      margin: 18px 0 6px;
-      font-weight: 900;
-    }
-    .uof-input{
-      width: 110px;
-      max-width: 100%;
-    }
-    .uof-age{
-      white-space: nowrap;
-      font-weight: 700;
-    }
+    table.uof { width:100%; border-collapse:collapse; margin-top:10px; }
+    table.uof th, table.uof td { border:1px solid var(--border); padding:8px 10px; }
+    table.uof th { background: var(--input-bg); text-align:left; font-weight:800; }
+    .uof-section-title{ margin:18px 0 6px; font-weight:900; }
+    .uof-input{ width:110px; max-width:100%; }
+    .uof-age{ white-space:nowrap; font-weight:700; }
+    .tabs{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .tab{ padding:8px 12px; border:1px solid var(--border); border-radius:999px; background:var(--card); font-weight:800; text-decoration:none; }
+    .tab.active{ background: var(--input-bg); }
   </style>
 
   <div class="card">
@@ -37,10 +19,15 @@
       <div>
         <h1 style="margin:0 0 6px;">Use of Force standards</h1>
         <p class="help" style="margin:0;">
-          Edit the required results by age group.
-          For <strong>1000m run</strong>, enter time as <strong>MM:SS</strong> (e.g. 04:20).
+          Edit results by age group. For 1000m run use <strong>MM:SS</strong> (e.g. 04:20). (Also accepts PDF format like 4.40)
         </p>
+
+        <div class="tabs">
+          <a class="tab {% if gender == 'M' %}active{% endif %}" href="?gender=M">Men</a>
+          <a class="tab {% if gender == 'F' %}active{% endif %}" href="?gender=F">Women</a>
+        </div>
       </div>
+
       <div>
         <a class="btn secondary" href="{% url 'calendar' %}">Back</a>
       </div>
@@ -61,7 +48,6 @@
 
   <form method="post">
     {% csrf_token %}
-
     <div class="card">
       <div class="help" style="margin-bottom:10px;">
         Tip: Push-ups/Sit-ups improve with higher numbers (Minimum ≤ Good ≤ Very good).<br>
@@ -74,7 +60,7 @@
         <table class="uof">
           <thead>
             <tr>
-              <th style="width:220px;">Age group</th>
+              <th>Age group</th>
               <th>Minimum</th>
               <th>Good</th>
               <th>Very good</th>
@@ -85,26 +71,14 @@
               <tr>
                 <td class="uof-age">{{ row.get_age_group_display }}</td>
 
-                {% if block.exercise_key == "RUN" %}
-                  <td>
-                    <input class="uof-input" type="text" name="min_{{ row.id }}" value="{{ row.minimum_mmss }}" placeholder="MM:SS">
-                  </td>
-                  <td>
-                    <input class="uof-input" type="text" name="good_{{ row.id }}" value="{{ row.good_mmss }}" placeholder="MM:SS">
-                  </td>
-                  <td>
-                    <input class="uof-input" type="text" name="vg_{{ row.id }}" value="{{ row.very_good_mmss }}" placeholder="MM:SS">
-                  </td>
+                {% if block.exercise_key == 'RUN' %}
+                  <td><input class="uof-input" type="text" name="min_{{ row.id }}" value="{{ row.minimum_mmss }}"></td>
+                  <td><input class="uof-input" type="text" name="good_{{ row.id }}" value="{{ row.good_mmss }}"></td>
+                  <td><input class="uof-input" type="text" name="vg_{{ row.id }}" value="{{ row.very_good_mmss }}"></td>
                 {% else %}
-                  <td>
-                    <input class="uof-input" type="number" min="0" step="1" name="min_{{ row.id }}" value="{{ row.minimum }}">
-                  </td>
-                  <td>
-                    <input class="uof-input" type="number" min="0" step="1" name="good_{{ row.id }}" value="{{ row.good }}">
-                  </td>
-                  <td>
-                    <input class="uof-input" type="number" min="0" step="1" name="vg_{{ row.id }}" value="{{ row.very_good }}">
-                  </td>
+                  <td><input class="uof-input" type="text" name="min_{{ row.id }}" value="{{ row.minimum }}"></td>
+                  <td><input class="uof-input" type="text" name="good_{{ row.id }}" value="{{ row.good }}"></td>
+                  <td><input class="uof-input" type="text" name="vg_{{ row.id }}" value="{{ row.very_good }}"></td>
                 {% endif %}
               </tr>
             {% endfor %}

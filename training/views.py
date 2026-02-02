@@ -1408,20 +1408,60 @@ def _ensure_uof_defaults_exist():
 
 
 
+def seconds_to_mmss(seconds: int) -> str:
+    s = int(seconds or 0)
+    m = s // 60
+    sec = s % 60
+    return f"{m:02d}:{sec:02d}"
+
+def mmss_to_seconds(value: str) -> int:
+    """
+    Accepts:
+      - "4:20" or "04:20"
+      - "4.20" (PDF format)
+      - "" -> 0
+    Returns integer seconds.
+    """
+    v = (value or "").strip()
+    if not v:
+        return 0
+
+    # PDF-like "4.40"
+    if "." in v and v.replace(".", "").isdigit():
+        parts = v.split(".")
+        if len(parts) == 2:
+            minutes = int(parts[0])
+            seconds = int(parts[1])
+            if seconds >= 60:
+                raise ValueError("Seconds must be < 60.")
+            return minutes * 60 + seconds
+
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", v)
+    if not m:
+        raise ValueError("Time must be MM:SS (e.g. 04:20).")
+
+    minutes = int(m.group(1))
+    seconds = int(m.group(2))
+    if seconds >= 60:
+        raise ValueError("Seconds must be < 60.")
+    return minutes * 60 + seconds
+
+
 @login_required
 def uof_standards(request):
-    _ensure_uof_defaults_exist()
+    gender = (request.GET.get("gender") or UseOfForceStandard.GENDER_MALE).upper()
+    if gender not in (UseOfForceStandard.GENDER_MALE, UseOfForceStandard.GENDER_FEMALE):
+        gender = UseOfForceStandard.GENDER_MALE
 
     grouped = []
-    exercise_labels = dict(UseOfForceStandard.EXERCISE_CHOICES)
-
-    # Build data for template (GET + POST)
     for ex_key, ex_label in UseOfForceStandard.EXERCISE_CHOICES:
         rows = list(
-            UseOfForceStandard.objects.filter(exercise=ex_key).order_by("age_sort")
+            UseOfForceStandard.objects
+            .filter(gender=gender, exercise=ex_key)
+            .order_by("age_sort")
         )
 
-        # ✅ Add MM:SS display values for RUN rows
+        # ✅ Attach display strings for RUN directly onto each row
         if ex_key == UseOfForceStandard.EXERCISE_RUN:
             for r in rows:
                 r.minimum_mmss = seconds_to_mmss(r.minimum)
@@ -1441,9 +1481,9 @@ def uof_standards(request):
             is_run = (block["exercise_key"] == UseOfForceStandard.EXERCISE_RUN)
 
             for row in block["rows"]:
-                min_val = request.POST.get(f"min_{row.id}", "").strip()
-                good_val = request.POST.get(f"good_{row.id}", "").strip()
-                vg_val = request.POST.get(f"vg_{row.id}", "").strip()
+                min_val = (request.POST.get(f"min_{row.id}") or "").strip()
+                good_val = (request.POST.get(f"good_{row.id}") or "").strip()
+                vg_val = (request.POST.get(f"vg_{row.id}") or "").strip()
 
                 try:
                     if is_run:
@@ -1459,50 +1499,13 @@ def uof_standards(request):
                     updated += 1
 
                 except ValueError as e:
-                    messages.error(
-                        request,
-                        f"{block['exercise_label']} / {row.get_age_group_display()}: {e}"
-                    )
-                    return redirect("uof_standards")
+                    messages.error(request, f"{block['exercise_label']} / {row.get_age_group_display()}: {e}")
+                    return redirect(f"{request.path}?gender={gender}")
 
         messages.success(request, f"Saved {updated} rows.")
-        return redirect("uof_standards")
+        return redirect(f"{request.path}?gender={gender}")
 
     return render(request, "training/uof_standards.html", {
         "grouped": grouped,
-        "exercise_labels": exercise_labels,
+        "gender": gender,
     })
-
-def mmss_to_seconds(value: str) -> int:
-    """
-    Accepts:
-      - "4:20" or "04:20"
-      - "260" (treated as seconds)
-      - "" -> 0
-    Returns integer seconds.
-    """
-    v = (value or "").strip()
-    if not v:
-        return 0
-
-    # plain integer seconds
-    if v.isdigit():
-        return int(v)
-
-    m = re.fullmatch(r"(\d{1,2}):(\d{2})", v)
-    if not m:
-        raise ValueError("Time must be in MM:SS format (e.g. 04:20).")
-
-    minutes = int(m.group(1))
-    seconds = int(m.group(2))
-    if seconds >= 60:
-        raise ValueError("Seconds must be < 60 (MM:SS).")
-
-    return minutes * 60 + seconds
-
-
-def seconds_to_mmss(seconds: int) -> str:
-    s = int(seconds or 0)
-    m = s // 60
-    sec = s % 60
-    return f"{m:02d}:{sec:02d}"

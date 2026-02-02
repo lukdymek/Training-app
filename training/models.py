@@ -182,7 +182,15 @@ class EmailVerification(models.Model):
 
 
 class UseOfForceStandard(models.Model):
+    # ---- Gender ----
+    GENDER_MALE = "M"
+    GENDER_FEMALE = "F"
+    GENDER_CHOICES = [
+        (GENDER_MALE, "Men"),
+        (GENDER_FEMALE, "Women"),
+    ]
 
+    # ---- Exercises ----
     EXERCISE_PUSHUPS = "PUSHUPS"
     EXERCISE_SITUPS = "SITUPS"
     EXERCISE_RUN = "RUN"
@@ -193,6 +201,7 @@ class UseOfForceStandard(models.Model):
         (EXERCISE_RUN, "1000m run"),
     ]
 
+    # ---- Age groups ----
     AGE_UNDER_30 = "U29"
     AGE_30_34 = "30_34"
     AGE_35_39 = "35_39"
@@ -224,22 +233,27 @@ class UseOfForceStandard(models.Model):
         AGE_60_PLUS: 8,
     }
 
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, default=GENDER_MALE)
+
     exercise = models.CharField(max_length=20, choices=EXERCISE_CHOICES)
     age_group = models.CharField(max_length=20, choices=AGE_GROUP_CHOICES)
 
-    age_sort = models.PositiveSmallIntegerField()
+    # IMPORTANT: default avoids makemigrations asking questions
+    age_sort = models.PositiveSmallIntegerField(default=999)
 
-
-
-    minimum = models.IntegerField()
-    good = models.IntegerField()
-    very_good = models.IntegerField()
+    # For push-ups/sit-ups: integer repetitions.
+    # For 1000m run: store seconds (int) so we can display as MM:SS.
+    minimum = models.IntegerField(default=0)
+    good = models.IntegerField(default=0)
+    very_good = models.IntegerField(default=0)
 
     def save(self, *args, **kwargs):
-        if self.age_sort is None:
-            self.age_sort = self.AGE_SORT.get(self.age_group, 999)
+        self.age_sort = self.AGE_SORT.get(self.age_group, 999)
         super().save(*args, **kwargs)
 
     class Meta:
-        ordering = ["exercise", "age_sort"]
-        unique_together = ("exercise", "age_group")
+        ordering = ["gender", "exercise", "age_sort"]
+        unique_together = ("gender", "exercise", "age_group")
+
+    def __str__(self):
+        return f"{self.get_gender_display()} {self.get_exercise_display()} {self.get_age_group_display()}"
