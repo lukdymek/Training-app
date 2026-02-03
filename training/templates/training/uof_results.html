@@ -39,10 +39,16 @@
   </div>
 </div>
 
-<div style="height:14px;"></div>
-
 <div class="card">
-  <h2 style="margin:0 0 12px;">Trainees</h2>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+    <h2 style="margin:0;">Trainees</h2>
+
+    <a class="btn secondary"
+       href="{% url 'uof_export_docx_all_zip' training_id=training.id %}">
+      Export all (ZIP)
+    </a>
+  </div>
 
   <table class="uof-table">
     <thead>
@@ -51,7 +57,8 @@
         <th style="text-align:left;">Push-ups</th>
         <th style="text-align:left;">Sit-ups</th>
         <th style="text-align:left;">Run (MM:SS)</th>
-        <th style="text-align:right; padding-right:12px;">Save</th>
+        <th style="text-align:right; padding-right:12px;">Actions</th>
+
       </tr>
     </thead>
 
@@ -106,19 +113,26 @@
         </td>
 
         <td style="text-align:right;">
-          <div class="uof-actions">
-            <button class="btn primary" type="button"
-                    onclick="saveRow({{ training.id }}, {{ p.id }})">
-              Save
-            </button>
-          </div>
-          <div class="msg" id="msg-{{ p.id }}"></div>
-          
-<a class="btn secondary"
-   href="{% url 'uof_export_docx_one' training_id=training.id participation_id=p.id %}">
-  Export DOCX
-</a>
-        </td>
+  <div class="uof-actions" style="flex-direction:column; align-items:flex-end; gap:6px;">
+
+    <button class="btn primary" type="button"
+            onclick="saveRow({{ training.id }}, {{ p.id }})">
+      Save
+    </button>
+
+    <a class="btn secondary"
+       href="{% url 'uof_export_docx_one' training_id=training.id participation_id=p.id %}">
+      Export DOCX
+    </a>
+
+  </div>
+
+  <div class="msg" id="msg-{{ p.id }}"></div>
+</td>
+
+        
+
+ 
       </tr>
       {% endfor %}
     </tbody>

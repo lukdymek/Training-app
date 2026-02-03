@@ -1718,6 +1718,18 @@ def uof_results(request, pk):
         training.subject is not None
         and (training.subject.name or "").strip().lower() == "use of force"
     )
+    missing = []
+    if not (training.uof_instructor_1 or "").strip():
+        missing.append("Instructor 1")
+    if not (training.uof_instructor_2 or "").strip():
+        missing.append("Instructor 2")
+    if not (training.uof_chairman or "").strip():
+        missing.append("Chairperson")
+
+    if missing:
+        messages.error(request, "Please fill in: " + ", ".join(missing) + " before opening Results.")
+        return redirect("training_detail", pk=training.pk)
+
     if not is_uof:
         messages.error(request, "Results page is only available for Use of Force trainings.")
         return redirect("training_detail", pk=pk)
@@ -1848,7 +1860,7 @@ def uof_export_docx_all_zip(request, training_id: int):
 
             person = p.person
             end_date = training.end_at.date()
-            dob = person.date_of_birth
+            dob = person.dob
             age = _age_on(dob, end_date) if dob else ""
 
             def fmt_date(d: date | None) -> str:

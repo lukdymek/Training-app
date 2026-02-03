@@ -154,15 +154,7 @@
       </div>
     </div>
 
-    {% if messages %}
-      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
-        {% for message in messages %}
-          <div style="padding:10px 12px; border:1px solid var(--border); border-radius:12px; background: var(--card); margin-bottom:10px;">
-            {{ message }}
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
+    
   </div>
 
   <div style="height:14px;"></div>
@@ -274,7 +266,34 @@
       {% if is_uof %}
         <div style="height:14px;"></div>
         <div style="display:flex; justify-content:flex-end;">
-          <a class="btn primary" href="{% url 'uof_results' training.pk %}">Results</a>
+          <a class="btn secondary"
+            href="{% url 'uof_results' training.pk %}"
+            onclick="return uofCheckMetaBeforeResults();">
+            Results
+          </a>
+
+          <script>
+            function uofCheckMetaBeforeResults() {
+              // Only run on UOF page; safe guard
+              const i1 = document.getElementById("uof_instructor_1");
+              const i2 = document.getElementById("uof_instructor_2");
+              const ch = document.getElementById("uof_chairman");
+
+              // If inputs aren't on the page, just allow
+              if (!i1 || !i2 || !ch) return true;
+
+              const v1 = (i1.value || "").trim();
+              const v2 = (i2.value || "").trim();
+              const vc = (ch.value || "").trim();
+
+              if (!v1 || !v2 || !vc) {
+                alert("Please fill in Instructor 1, Instructor 2 and Chairperson before opening Results.");
+                return false; // block navigation
+              }
+              return true;
+            }
+          </script>
+
         </div>
       {% endif %}
     </div>

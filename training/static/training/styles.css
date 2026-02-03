@@ -153,3 +153,89 @@ textarea{min-height: 110px; resize: vertical}
   color:var(--link);
   cursor:pointer;
 }
+
+.flash-messages{
+  max-width: 1100px;
+  margin: 12px auto 0;
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flash{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.flash.error{
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.flash.success{
+  background: #dcfce7;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.flash.warning{
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.flash.info{
+  background: #e0f2fe;
+  border-color: #bae6fd;
+  color: #075985;
+}
+
+
+/* ===== Flash messages (Django messages) ===== */
+.container .flash-messages{
+  max-width: 1100px;
+  margin: 12px auto 0;
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.container .flash-messages .flash{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.container .flash-messages .flash.error{
+  background: #fee2e2 !important;
+  border-color: #fecaca !important;
+  color: #991b1b !important;
+}
+
+.container .flash-messages .flash.success{
+  background: #dcfce7 !important;
+  border-color: #bbf7d0 !important;
+  color: #166534 !important;
+}
+
+.container .flash-messages .flash.warning{
+  background: #fef3c7 !important;
+  border-color: #fde68a !important;
+  color: #92400e !important;
+}
+
+.container .flash-messages .flash.info{
+  background: #e0f2fe !important;
+  border-color: #bae6fd !important;
+  color: #075985 !important;
+}
