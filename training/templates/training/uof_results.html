@@ -1,0 +1,262 @@
+{% extends "training/base.html" %}
+{% block title %}Results - {{ training.course_name }}{% endblock %}
+
+{% block content %}
+<style>
+  .uof-table { width:100%; border-collapse:separate; border-spacing:0 10px; }
+  .uof-row { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow:hidden; }
+  .uof-row td { padding: 10px 12px; vertical-align: middle; }
+  .uof-name { font-weight: 800; white-space: nowrap; }
+  .uof-sub { font-size: 12px; color: var(--muted); }
+  .uof-input {
+    width: 120px; padding: 10px 12px; border-radius: 12px;
+    border: 1px solid var(--border); background: var(--input-bg); color: var(--text);
+  }
+  .uof-input.small { width: 90px; }
+  .uof-actions { display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+  .msg { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .msg.ok { color: #22c55e; font-weight: 700; }
+  .msg.err { color: #ef4444; font-weight: 700; }
+  @media (max-width: 900px){
+    .uof-input { width:100%; }
+    .uof-actions { justify-content:flex-start; }
+  }
+</style>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="margin:0 0 6px;">Results – {{ training.course_name }}</h1>
+      <div class="help" style="margin:0;">
+        <strong>When:</strong> {{ training.start_at }} → {{ training.end_at }}<br>
+        <strong>Where:</strong> {{ training.location }}
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn secondary" href="{% url 'training_detail' training.pk %}">Back to training</a>
+    </div>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h2 style="margin:0 0 12px;">Trainees</h2>
+
+  <table class="uof-table">
+    <thead>
+      <tr style="color:var(--muted); font-size:12px; text-transform:uppercase;">
+        <th style="text-align:left; padding-left:12px;">Name</th>
+        <th style="text-align:left;">Push-ups</th>
+        <th style="text-align:left;">Sit-ups</th>
+        <th style="text-align:left;">Run (MM:SS)</th>
+        <th style="text-align:right; padding-right:12px;">Save</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for p in trainees %}
+      <tr class="uof-row">
+        <td>
+          <div class="uof-name">{{ p.person.last_name|upper }} {{ p.person.first_name }}</div>
+          <div class="uof-sub">SYSPER ID: {{ p.person.sysper_id }}</div>
+          <div
+            class="msg {% if p.assessment.passed %}ok{% elif p.assessment.pushups or p.assessment.situps or p.assessment.run_seconds %}err{% endif %}"
+            id="passfail-{{ p.id }}"
+          >
+            {% if p.assessment.passed %}
+              PASS
+            {% elif p.assessment.pushups or p.assessment.situps or p.assessment.run_seconds %}
+              FAIL
+            {% endif %}
+          </div>
+
+
+        </td>
+
+        <td>
+          <input class="uof-input small" type="number" min="0" step="1"
+                 id="push-{{ p.id }}"
+                 value="{{ p.assessment.pushups|default_if_none:'' }}">
+                 <div class="msg" id="rate-pushups-{{ p.id }}">
+  {{ p.assessment.get_pushups_rating_display|title }}
+
+</div>
+        </td>
+
+        <td>
+          <input class="uof-input small" type="number" min="0" step="1"
+                 id="sit-{{ p.id }}"
+                 value="{{ p.assessment.situps|default_if_none:'' }}">
+                 <div class="msg" id="rate-situps-{{ p.id }}">
+  {{ p.assessment.get_situps_rating_display|title }}
+</div>
+        </td>
+
+        <td>
+          <input class="uof-input" type="text"
+                 id="run-{{ p.id }}"
+                 placeholder="e.g. 04:30"
+                 value="{% if p.assessment.run_seconds %}{{ p.assessment.run_seconds }}{% endif %}"
+                 data-run-seconds="{{ p.assessment.run_seconds|default_if_none:'' }}">
+          <div class="msg" id="rate-run-{{ p.id }}">
+  {{ p.assessment.get_run_rating_display|title }}
+</div>
+        </td>
+
+        <td style="text-align:right;">
+          <div class="uof-actions">
+            <button class="btn primary" type="button"
+                    onclick="saveRow({{ training.id }}, {{ p.id }})">
+              Save
+            </button>
+          </div>
+          <div class="msg" id="msg-{{ p.id }}"></div>
+          
+<a class="btn secondary"
+   href="{% url 'uof_export_docx_one' training_id=training.id participation_id=p.id %}">
+  Export DOCX
+</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+
+  function prettyLabel(label) {
+  if (!label) return "";
+  label = String(label).toLowerCase();
+
+  if (label === "very_good") return "Very good";
+  if (label === "minimum") return "Minimum";
+  if (label === "good") return "Good";
+  if (label === "fail") return "Fail";
+
+  // fallback: capitalize first letter
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + "=")) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  function mmssToSeconds(s) {
+    if (!s) return null;
+    s = String(s).trim();
+    const m = s.match(/^(\d{1,2}):([0-5]\d)$/);
+    if (!m) return null;
+    return (parseInt(m[1], 10) * 60) + parseInt(m[2], 10);
+  }
+
+  function secondsToMMSS(sec) {
+    if (sec === null || sec === "" || sec === undefined) return "";
+    sec = parseInt(sec, 10);
+    if (isNaN(sec)) return "";
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+  }
+
+  // Convert stored seconds into MM:SS for display
+  document.querySelectorAll('input[id^="run-"]').forEach(inp => {
+    const stored = inp.getAttribute("data-run-seconds");
+    if (stored && stored !== "None") {
+      inp.value = secondsToMMSS(stored);
+    } else {
+      inp.value = "";
+    }
+  });
+
+  async function saveRow(trainingId, participationId) {
+    const msg = document.getElementById(`msg-${participationId}`);
+    msg.className = "msg";
+    msg.textContent = "Saving...";
+
+    const pushVal = document.getElementById(`push-${participationId}`).value;
+    const sitVal  = document.getElementById(`sit-${participationId}`).value;
+    const runVal  = document.getElementById(`run-${participationId}`).value;
+
+    const pushups = pushVal ? parseInt(pushVal, 10) : "";
+    const situps  = sitVal ? parseInt(sitVal, 10) : "";
+
+    const runSeconds = mmssToSeconds(runVal);
+    if (runVal && runSeconds === null) {
+      msg.className = "msg err";
+      msg.textContent = "Run time must be MM:SS (e.g. 04:30).";
+      return;
+    }
+
+    const url = "{% url 'uof_save_scores' training_id=training.id participation_id=0 %}"
+      .replace("/0/save/", `/${participationId}/save/`);
+
+    const formData = new FormData();
+    formData.append("pushups", pushups);
+    formData.append("situps", situps);
+    formData.append("run_time", runVal); 
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+
+      if (data.ok) {
+        // Update run field with normalized MM:SS returned by backend
+        if (data.run_mmss !== undefined) {
+          document.getElementById(`run-${participationId}`).value = data.run_mmss || "";
+        }
+
+        // PASS / FAIL
+        const pf = document.getElementById(`passfail-${participationId}`);
+        if (pf) {
+          pf.className = "msg " + (data.passed ? "ok" : "err");
+          pf.textContent = data.passed ? "PASS" : "FAIL";
+        }
+
+        // Ratings per exercise
+        const rp = document.getElementById(`rate-pushups-${participationId}`);
+        const rs = document.getElementById(`rate-situps-${participationId}`);
+        const rr = document.getElementById(`rate-run-${participationId}`);
+
+        if (rp) rp.textContent = prettyLabel(data.pushups_rating);
+        if (rs) rs.textContent = prettyLabel(data.situps_rating);
+        if (rr) rr.textContent = prettyLabel(data.run_rating);
+
+
+        msg.className = "msg ok";
+        msg.textContent = "Saved.";
+      } else {
+        msg.className = "msg err";
+        msg.textContent = data.error || "Error saving.";
+      }
+    } catch (e) {
+      console.error(e);
+      msg.className = "msg err";
+      msg.textContent = "Error saving (network/server).";
+    }
+  }
+</script>
+{% endblock %}

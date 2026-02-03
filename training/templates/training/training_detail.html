@@ -55,6 +55,7 @@
       cursor:pointer;
     }
     .result-item:hover{ border-color: #9ca3af; }
+
     .grid2{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -91,6 +92,46 @@
       margin-top: 6px;
       line-height: 1.2;
     }
+
+    /* UOF meta box (Instructor/Chairman) */
+    .uof-meta-box{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background: var(--card);
+      padding:12px;
+      margin-bottom:12px;
+    }
+    .uof-meta-grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:10px;
+      align-items:end;
+    }
+    @media (max-width: 820px){
+      .uof-meta-grid{ grid-template-columns: 1fr; }
+    }
+    .uof-meta-grid label{
+      display:block;
+      font-size:12px;
+      color: var(--muted);
+      font-weight:700;
+      margin-bottom:4px;
+    }
+    .uof-meta-grid input{
+      width:100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      color: var(--text);
+    }
+    .uof-meta-actions{
+      margin-top:10px;
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      flex-wrap:wrap;
+    }
   </style>
 
   <div class="card">
@@ -126,10 +167,39 @@
 
   <div style="height:14px;"></div>
 
-  <div class="grid2">
+  <div class="{% if is_uof %}grid1{% else %}grid2{% endif %}">
     <!-- LEFT: Trainees -->
     <div class="card">
       <h2 style="margin:0 0 12px;">Trainees</h2>
+
+      {% if is_uof %}
+        <!-- Instructor/Chairman meta -->
+        <div class="uof-meta-box">
+          <div style="font-weight:800; margin-bottom:6px;">Use of Force details</div>
+
+          <form method="post" action="{% url 'uof_update_meta' training.pk %}">
+            {% csrf_token %}
+            <div class="uof-meta-grid">
+              <div>
+                <label>Instructor 1</label>
+                <input type="text" name="uof_instructor_1" value="{{ training.uof_instructor_1|default:'' }}">
+              </div>
+              <div>
+                <label>Instructor 2</label>
+                <input type="text" name="uof_instructor_2" value="{{ training.uof_instructor_2|default:'' }}">
+              </div>
+              <div>
+                <label>Chairman</label>
+                <input type="text" name="uof_chairman" value="{{ training.uof_chairman|default:'' }}">
+              </div>
+            </div>
+
+            <div class="uof-meta-actions">
+              <button class="btn secondary" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+      {% endif %}
 
       <div class="form-row">
         <label for="trainee-search">Add trainee</label>
@@ -200,9 +270,17 @@
           <div style="color:var(--muted);">No trainees yet.</div>
         {% endfor %}
       </div>
+
+      {% if is_uof %}
+        <div style="height:14px;"></div>
+        <div style="display:flex; justify-content:flex-end;">
+          <a class="btn primary" href="{% url 'uof_results' training.pk %}">Results</a>
+        </div>
+      {% endif %}
     </div>
 
-    <!-- RIGHT: Trainers -->
+    {% if not is_uof %}
+    <!-- RIGHT: Trainers (normal trainings only) -->
     <div class="card">
       <h2 style="margin:0 0 12px;">Trainers</h2>
 
@@ -310,6 +388,7 @@
         {% endfor %}
       </div>
     </div>
+    {% endif %}
   </div>
 
   <script>
@@ -424,11 +503,9 @@
         selectEl.dataset.original = data.status;
         setStatusClass(selectEl, data.status);
 
-        // update audit line below dropdown
         const auditEl = document.querySelector(`.status-audit[data-audit-for="${pid}"]`);
         if (auditEl) {
           auditEl.style.display = "block";
-          // Use display string from backend if you want; for now use status label + server timestamp + name
           const labelMap = {
             "AUTHORISED": "Authorised",
             "PENDING": "Pending",

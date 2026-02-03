@@ -48,6 +48,12 @@ urlpatterns = [
     path("participation/<int:participation_id>/status/", views.participation_set_status, name="participation_set_status"),
     path("participation/<int:participation_id>/edit/", views.participation_edit, name="participation_edit"),
     path("uof-standards/", views.uof_standards, name="uof_standards"),
+    path("trainings/<int:training_id>/uof/<int:participation_id>/save/", views.uof_save_scores, name="uof_save_scores"),
+    path("trainings/<int:pk>/uof/meta/", views.uof_update_meta, name="uof_update_meta"),
+    path("trainings/<int:pk>/uof/results/", views.uof_results, name="uof_results"), 
+    path("trainings/<int:training_id>/uof/export/<int:participation_id>/docx/", views.uof_export_docx_one, name="uof_export_docx_one"),
+    path("trainings/<int:training_id>/uof/export/all.zip", views.uof_export_docx_all_zip, name="uof_export_docx_all_zip"),
+
 
 
 

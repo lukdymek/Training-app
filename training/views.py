@@ -1,3 +1,7 @@
+import os
+from io import BytesIO
+from zipfile import ZipFile, ZIP_DEFLATED
+from django.utils.text import slugify
 from django.shortcuts import render, get_object_or_404
 from django.shortcuts import redirect
 from django.contrib import messages
@@ -43,8 +47,12 @@ from django.utils import timezone
 from .forms import ParticipationEditForm
 import re
 from django.forms import modelformset_factory
-from .models import UseOfForceStandard
+from .models import UseOfForceStandard, UofAssessment, UofRating
 from .forms import UseOfForceStandardForm
+from .docx_utils import fill_bookmarks
+
+from datetime import date
+from django.contrib.staticfiles import finders
 
 
 
@@ -142,6 +150,7 @@ def training_list(request):
 def training_detail(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
+    
     # total training duration in days (inclusive)
     # Example: Jan 1 to Jan 4 => 4 days
     duration_days = (training.end_at.date() - training.start_at.date()).days + 1
@@ -191,6 +200,10 @@ def training_detail(request, pk):
         "available_trainers": available_trainers,
         "bulk_trainers_form": bulk_trainers_form,
         "duration_days": duration_days, 
+        "is_uof": (
+        training.subject is not None
+        and (training.subject.name or "").strip().lower() == "use of force"
+    ),
     }
 
     return render(request, "training/training_detail.html", context)
@@ -1509,3 +1522,372 @@ def uof_standards(request):
         "grouped": grouped,
         "gender": gender,
     })
+
+
+def parse_mmss(value: str) -> int:
+    v = (value or "").strip()
+    if not v:
+        return 0
+    # allow "4.40" or "4:40"
+    if "." in v and v.replace(".", "").isdigit():
+        m, s = v.split(".", 1)
+        return int(m) * 60 + int(s)
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", v)
+    if not m:
+        raise ValueError("Run time must be MM:SS (e.g. 04:20).")
+    mm = int(m.group(1))
+    ss = int(m.group(2))
+    if ss >= 60:
+        raise ValueError("Seconds must be < 60.")
+    return mm * 60 + ss
+
+def seconds_to_mmss(seconds: int) -> str:
+    s = int(seconds or 0)
+    return f"{s//60:02d}:{s%60:02d}"
+
+def age_on_date(dob: datetime.date, on_date: datetime.date) -> int:
+    if not dob:
+        return 0
+    years = on_date.year - dob.year
+    if (on_date.month, on_date.day) < (dob.month, dob.day):
+        years -= 1
+    return years
+
+def age_group_key(age_years: int) -> str:
+    # match your UseOfForceStandard AGE_GROUP_CHOICES values
+    if age_years <= 29: return "U29"
+    if 30 <= age_years <= 34: return "30_34"
+    if 35 <= age_years <= 39: return "35_39"
+    if 40 <= age_years <= 44: return "40_44"
+    if 45 <= age_years <= 49: return "45_49"
+    if 50 <= age_years <= 54: return "50_54"
+    if 55 <= age_years <= 59: return "55_59"
+    return "60_PLUS"
+
+def rating_for_reps(reps: int, std: UseOfForceStandard) -> str:
+    # pushups/situps: higher is better
+    if reps is None:
+        return ""
+    if reps >= std.very_good:
+        return UofRating.VERY_GOOD
+    if reps >= std.good:
+        return UofRating.GOOD
+    if reps >= std.minimum:
+        return UofRating.MINIMUM
+    return UofRating.FAIL
+
+def rating_for_run(seconds: int, std: UseOfForceStandard) -> str:
+    # run: lower is better (standards stored in seconds)
+    if seconds is None:
+        return ""
+    if seconds <= std.very_good:
+        return UofRating.VERY_GOOD
+    if seconds <= std.good:
+        return UofRating.GOOD
+    if seconds <= std.minimum:
+        return UofRating.MINIMUM
+    return UofRating.FAIL
+
+def compute_uof(assessment: UofAssessment) -> None:
+    person = assessment.participation.person
+    training = assessment.participation.training
+
+    test_date = assessment.tested_at or (training.end_at.date() if training.end_at else timezone.now().date())
+    age = age_on_date(person.dob, test_date)
+    ag = age_group_key(age)
+
+    # gender key based on your Person.gender storage
+    # Adjust if your Person.gender stores something else.
+    gender = "M" if (person.gender or "").upper().startswith("M") else "F"
+
+    def get_std(ex_key: str) -> UseOfForceStandard:
+        return UseOfForceStandard.objects.get(gender=gender, exercise=ex_key, age_group=ag)
+
+    std_push = get_std("PUSHUPS")
+    std_sit  = get_std("SITUPS")
+    std_run  = get_std("RUN")
+
+    assessment.pushups_rating = rating_for_reps(assessment.pushups, std_push)
+    assessment.situps_rating  = rating_for_reps(assessment.situps, std_sit)
+    assessment.run_rating     = rating_for_run(assessment.run_seconds, std_run)
+
+    # PASS RULE (you can change easily later):
+    # pass only if all three are at least MINIMUM
+    assessment.passed = (
+        assessment.pushups_rating in [UofRating.MINIMUM, UofRating.GOOD, UofRating.VERY_GOOD] and
+        assessment.situps_rating  in [UofRating.MINIMUM, UofRating.GOOD, UofRating.VERY_GOOD] and
+        assessment.run_rating     in [UofRating.MINIMUM, UofRating.GOOD, UofRating.VERY_GOOD]
+    )
+
+def _parse_mmss_to_seconds(value: str | None) -> int | None:
+    if not value:
+        return None
+    value = value.strip()
+    # Accept "M:SS" or "MM:SS"
+    parts = value.split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        m = int(parts[0])
+        s = int(parts[1])
+    except ValueError:
+        return None
+    if m < 0 or s < 0 or s > 59:
+        return None
+    return m * 60 + s
+
+
+@login_required
+@require_POST
+def uof_save_scores(request, training_id, participation_id):
+    if not request.user.is_staff:
+        return HttpResponseForbidden("You do not have permission.")
+
+    p = get_object_or_404(Participation, id=participation_id, training_id=training_id)
+
+    # Create assessment if missing
+    a, _ = UofAssessment.objects.get_or_create(
+        participation=p,
+        defaults={"tested_at": (p.training.end_at.date() if p.training.end_at else timezone.now().date())}
+    )
+
+    push = (request.POST.get("pushups") or "").strip()
+    sit  = (request.POST.get("situps") or "").strip()
+
+    # Accept either run_seconds OR run_time (MM:SS)
+    run_seconds_raw = request.POST.get("run_seconds")
+    run_time_raw = (request.POST.get("run_time") or "").strip()
+
+    notes = (request.POST.get("notes") or "").strip()
+
+    run_seconds = None
+    if run_seconds_raw not in (None, "", "None"):
+        try:
+            run_seconds = int(run_seconds_raw)
+        except ValueError:
+            run_seconds = None
+    elif run_time_raw:
+        # Use your existing helper; you said parse_mmss exists already
+        run_seconds = parse_mmss(run_time_raw)
+
+    try:
+        a.pushups = int(push) if push != "" else None
+        a.situps  = int(sit) if sit != "" else None
+
+        # ✅ this is the fix: use the computed run_seconds
+        a.run_seconds = run_seconds
+
+        a.notes = notes
+
+        # compute ratings + pass/fail (your existing function)
+        compute_uof(a)
+        a.save()
+
+        return JsonResponse({
+            "ok": True,
+            "pushups_rating": a.pushups_rating,
+            "situps_rating": a.situps_rating,
+            "run_rating": a.run_rating,
+            "passed": a.passed,
+            "run_mmss": seconds_to_mmss(a.run_seconds) if a.run_seconds is not None else "",
+        })
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=400)
+
+    
+@login_required
+@staff_required
+@require_POST
+def uof_update_meta(request, pk):
+    training = get_object_or_404(Training, pk=pk)
+
+    training.uof_instructor_1 = (request.POST.get("uof_instructor_1") or "").strip()
+    training.uof_instructor_2 = (request.POST.get("uof_instructor_2") or "").strip()
+    training.uof_chairman = (request.POST.get("uof_chairman") or "").strip()
+    training.save(update_fields=["uof_instructor_1", "uof_instructor_2", "uof_chairman"])
+
+    messages.success(request, "Use of Force instructors updated.")
+    return redirect("training_detail", pk=pk)
+
+@login_required
+@staff_required
+def uof_results(request, pk):
+    training = get_object_or_404(Training, pk=pk)
+
+    is_uof = (
+        training.subject is not None
+        and (training.subject.name or "").strip().lower() == "use of force"
+    )
+    if not is_uof:
+        messages.error(request, "Results page is only available for Use of Force trainings.")
+        return redirect("training_detail", pk=pk)
+
+    trainees = Participation.objects.select_related("person").filter(
+        training=training,
+        role="TRAINEE",
+    ).order_by("person__last_name", "person__first_name")
+
+    # Attach assessment to each participation
+    for p in trainees:
+        assessment, _ = UofAssessment.objects.get_or_create(participation=p)
+        p.assessment = assessment
+
+    return render(
+        request,
+        "training/uof_results.html",
+        {
+            "training": training,
+            "trainees": trainees,
+        },
+    )
+
+
+def _age_on(dob: date, on_date: date) -> int:
+    return on_date.year - dob.year - ((on_date.month, dob.day) < (dob.month, dob.day))
+
+
+def _pretty_rating(s: str) -> str:
+    # Convert values like VERY_GOOD -> Very good
+    if not s:
+        return ""
+    s = str(s).strip()
+    s = s.replace("_", " ").lower()
+    return s[:1].upper() + s[1:]
+
+
+@login_required
+@staff_required
+def uof_export_docx_one(request, training_id: int, participation_id: int):
+    training = get_object_or_404(Training, pk=training_id)
+    p = get_object_or_404(Participation.objects.select_related("person", "training"), pk=participation_id, training=training)
+    a, _ = UofAssessment.objects.get_or_create(participation=p)
+
+    # Ensure ratings/pass are up to date (your uof_save_scores does this already,
+    # but for export we ensure the computed fields exist)
+    # If you already have a compute function like compute_uof(a), call it here.
+    # Example:
+    # compute_uof(a)
+
+    template_path = finders.find("Examination_card_template.docx")
+    if not template_path:
+        raise FileNotFoundError("Examination_card_template.docx not found in static files.")
+    # If you prefer, store template under training/static/ or a dedicated folder.
+    with open(template_path, "rb") as f:
+        docx_bytes = f.read()
+
+    person = p.person
+    end_date = training.end_at.date()
+    dob = person.dob
+    age = _age_on(dob, end_date) if dob else ""
+
+    def fmt_date(d: date | None) -> str:
+        if not d:
+            return ""
+        return d.strftime("%m/%d/%Y")
+
+    # Marks: default YES (customize if you have a real field)
+    yes_mark, no_mark = "X", ""
+
+    # Fill bookmarks
+    fields = {
+        "Iteration": "",
+        "FirstName": (person.first_name or "") + "\u00A0",
+        "LastName": person.last_name or "",
+        "DOB": fmt_date(dob),
+        "Age": str(age),
+        "TestDate": fmt_date(end_date),
+        "TestPlace": training.location or "",
+        "Gender": (person.gender or ""),
+        "OfficerFitnessYesMark": yes_mark,
+        "OfficerFitnessNoMark": no_mark,
+
+        "PushScore": "" if a.pushups is None else str(a.pushups),
+        "SitScore": "" if a.situps is None else str(a.situps),
+        "RunScore": "" if a.run_seconds is None else seconds_to_mmss(a.run_seconds),  # use your existing helper if you have it
+
+        "PushResult": _pretty_rating(getattr(a, "pushups_rating", "")),
+        "SitResult": _pretty_rating(getattr(a, "situps_rating", "")),
+        "RunResult": _pretty_rating(getattr(a, "run_rating", "")),
+
+        "FinalAssessment": "Passed" if getattr(a, "passed", False) else "Failed",
+
+        "Instructor1Name": training.uof_instructor_1 or "",
+        "Instructor2Name": training.uof_instructor_2 or "",
+        "ChairpersonName": training.uof_chairman or "",
+    }
+
+    docx_bytes = fill_bookmarks(docx_bytes, fields)
+
+    filename = f"uof_{training.id}_{slugify(person.last_name)}_{slugify(person.first_name)}.docx"
+    resp = HttpResponse(docx_bytes, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@login_required
+@staff_required
+def uof_export_docx_all_zip(request, training_id: int):
+    training = get_object_or_404(Training, pk=training_id)
+
+    trainees = Participation.objects.select_related("person").filter(training=training, role="TRAINEE").order_by(
+        "person__last_name", "person__first_name"
+    )
+
+    out = BytesIO()
+    with ZipFile(out, "w", compression=ZIP_DEFLATED) as z:
+        for p in trainees:
+            # reuse the single export by building bytes in-memory
+            # simplest: call the same fill logic inline (duplicate minimal)
+            a, _ = UofAssessment.objects.get_or_create(participation=p)
+
+            template_path = finders.find("Examination_card_template.docx")
+            if not template_path:
+                raise FileNotFoundError("Examination_card_template.docx not found in static files.")
+            with open(template_path, "rb") as f:
+                docx_bytes = f.read()
+
+            person = p.person
+            end_date = training.end_at.date()
+            dob = person.date_of_birth
+            age = _age_on(dob, end_date) if dob else ""
+
+            def fmt_date(d: date | None) -> str:
+                if not d:
+                    return ""
+                return d.strftime("%m/%d/%Y")
+
+            fields = {
+                "Iteration": "",
+                "FirstName": (person.first_name or "") + "\u00A0",
+                "LastName": person.last_name or "",
+                "DOB": fmt_date(dob),
+                "Age": str(age),
+                "TestDate": fmt_date(end_date),
+                "TestPlace": training.location or "",
+                "Gender": (person.gender or ""),
+                "OfficerFitnessYesMark": "X",
+                "OfficerFitnessNoMark": "",
+
+                "PushScore": "" if a.pushups is None else str(a.pushups),
+                "SitScore": "" if a.situps is None else str(a.situps),
+                "RunScore": "" if a.run_seconds is None else seconds_to_mmss(a.run_seconds),
+
+                "PushResult": _pretty_rating(getattr(a, "pushups_rating", "")),
+                "SitResult": _pretty_rating(getattr(a, "situps_rating", "")),
+                "RunResult": _pretty_rating(getattr(a, "run_rating", "")),
+
+                "FinalAssessment": "Passed" if getattr(a, "passed", False) else "Failed",
+
+                "Instructor1Name": training.uof_instructor_1 or "",
+                "Instructor2Name": training.uof_instructor_2 or "",
+                "ChairpersonName": training.uof_chairman or "",
+            }
+
+            docx_bytes = fill_bookmarks(docx_bytes, fields)
+
+            fname = f"{slugify(person.last_name)}_{slugify(person.first_name)}_{person.sysper_id}.docx"
+            z.writestr(fname, docx_bytes)
+
+    resp = HttpResponse(out.getvalue(), content_type="application/zip")
+    resp["Content-Disposition"] = f'attachment; filename="uof_training_{training.id}_cards.zip"'
+    return resp

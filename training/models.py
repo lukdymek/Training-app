@@ -59,6 +59,9 @@ class Training(models.Model):
     location = models.CharField(max_length=120)
     capacity = models.PositiveIntegerField(default=0)
     remarks = models.TextField(blank=True)
+    uof_instructor_1 = models.CharField(max_length=120, blank=True, default="")
+    uof_instructor_2 = models.CharField(max_length=120, blank=True, default="")
+    uof_chairman = models.CharField(max_length=120, blank=True, default="")
 
     class Meta:
         constraints = [
@@ -88,12 +91,6 @@ class Participation(models.Model):
     person = models.ForeignKey("Person", on_delete=models.CASCADE)
     training = models.ForeignKey("Training", on_delete=models.CASCADE)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
-    status = models.CharField(
-        max_length=12,
-        choices=STATUS_CHOICES,
-        default="PENDING",
-        db_index=True,
-    )
     days = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     timespan = DateTimeRangeField(null=True, blank=True)
 
@@ -257,3 +254,36 @@ class UseOfForceStandard(models.Model):
 
     def __str__(self):
         return f"{self.get_gender_display()} {self.get_exercise_display()} {self.get_age_group_display()}"
+
+
+class UofRating(models.TextChoices):
+    FAIL = "FAIL", "Fail"
+    MINIMUM = "MINIMUM", "Minimum"
+    GOOD = "GOOD", "Good"
+    VERY_GOOD = "VERY_GOOD", "Very good"
+
+class UofAssessment(models.Model):
+    participation = models.OneToOneField(
+        "Participation",
+        on_delete=models.CASCADE,
+        related_name="uof_assessment",
+    )
+
+    tested_at = models.DateField(default=timezone.now)
+
+    pushups = models.PositiveSmallIntegerField(null=True, blank=True)
+    situps = models.PositiveSmallIntegerField(null=True, blank=True)
+    run_seconds = models.PositiveSmallIntegerField(null=True, blank=True)  # store as seconds
+
+    pushups_rating = models.CharField(max_length=20, choices=UofRating.choices, blank=True, default="")
+    situps_rating = models.CharField(max_length=20, choices=UofRating.choices, blank=True, default="")
+    run_rating = models.CharField(max_length=20, choices=UofRating.choices, blank=True, default="")
+
+    passed = models.BooleanField(default=False)
+
+    notes = models.TextField(blank=True, default="")
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"UOF Assessment for {self.participation_id}"
