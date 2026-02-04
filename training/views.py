@@ -123,11 +123,11 @@ def training_detail(request, pk):
         duration_days = 1
 
     trainees = Participation.objects.filter(
-        training=training, role="TRAINEE"
+        training=training, role="TRAINEE", removed_at__isnull=True,
     ).select_related("person")
 
     trainers = Participation.objects.filter(
-        training=training, role="TRAINER"
+        training=training, role="TRAINER", removed_at__isnull=True,
     ).select_related("person")
 
     start = training.start_at
@@ -698,30 +698,72 @@ def people_search(request, pk):
             for p in people
         ]
     })
+def _soft_remove_participations(qs, user, reason: str):
+    now = timezone.now()
+    qs.update(
+        removed_at=now,
+        removed_by=user,
+        removed_reason=(reason or "").strip(),
+    )
 
 @login_required
 @staff_required
 @require_POST
 def remove_trainee(request, pk, person_id):
     training = get_object_or_404(Training, pk=pk)
-    Participation.objects.filter(
+    reason = (request.POST.get("reason") or "").strip()
+
+    # remove from this training
+    qs = Participation.objects.filter(
         training=training,
         person_id=person_id,
         role="TRAINEE",
-    ).delete()
+        removed_at__isnull=True,
+    )
+    _soft_remove_participations(qs, request.user, reason)
+
+    # ALSO remove from future trainings in the same recurring series (if this training is recurring)
+    series = getattr(training, "recurring_training", None)
+    if series is not None:
+        future_qs = Participation.objects.filter(
+            person_id=person_id,
+            role="TRAINEE",
+            training__recurring_training=series,
+            training__start_at__gt=training.start_at,
+            removed_at__isnull=True,
+        )
+        _soft_remove_participations(future_qs, request.user, reason)
+
     messages.success(request, "Trainee removed from training.")
     return redirect("training_detail", pk=pk)
+
 
 @login_required
 @staff_required
 @require_POST
 def remove_trainer(request, pk, person_id):
     training = get_object_or_404(Training, pk=pk)
-    Participation.objects.filter(
+    reason = (request.POST.get("reason") or "").strip()
+
+    qs = Participation.objects.filter(
         training=training,
         person_id=person_id,
         role="TRAINER",
-    ).delete()
+        removed_at__isnull=True,
+    )
+    _soft_remove_participations(qs, request.user, reason)
+
+    series = getattr(training, "recurring_training", None)
+    if series is not None:
+        future_qs = Participation.objects.filter(
+            person_id=person_id,
+            role="TRAINER",
+            training__recurring_training=series,
+            training__start_at__gt=training.start_at,
+            removed_at__isnull=True,
+        )
+        _soft_remove_participations(future_qs, request.user, reason)
+
     messages.success(request, "Trainer removed from training.")
     return redirect("training_detail", pk=pk)
 
@@ -801,15 +843,20 @@ def person_history(request, person_id):
 
     base_qs = (
         Participation.objects
-        .filter(person=person)
+        .filter(person=person, removed_at__isnull=True)   # ✅ only active participations
         .select_related("training", "training__subject")
     )
 
     completed = base_qs.filter(training__end_at__lt=t).order_by("-training__end_at", "-training__start_at")
     upcoming = base_qs.filter(training__start_at__gte=t).order_by("training__start_at")
-
-    # Optional: include "ongoing" trainings (started but not ended yet)
     ongoing = base_qs.filter(training__start_at__lt=t, training__end_at__gte=t).order_by("training__end_at")
+
+    removed = (
+        Participation.objects
+        .filter(person=person, removed_at__isnull=False)  # ✅ removed participations
+        .select_related("training", "training__subject", "removed_by")
+        .order_by("-removed_at")
+    )
 
     return render(
         request,
@@ -819,8 +866,10 @@ def person_history(request, person_id):
             "completed": completed,
             "upcoming": upcoming,
             "ongoing": ongoing,
+            "removed": removed,   # ✅ new
         },
     )
+
 
 @login_required
 @staff_required
@@ -923,7 +972,6 @@ def trainer_search_api(request):
 
 @login_required
 @staff_required
-@login_required
 def recurring_training(request):
     """
     Page with dropdowns (subject + filter) and a dynamic list loaded via API.
@@ -932,9 +980,9 @@ def recurring_training(request):
     return render(request, "training/recurring_training.html", {"subjects": subjects})
 
 
+@login_required
 @staff_required
 @require_GET
-@login_required
 def recurring_training_api(request):
     """
     Returns JSON list of people with:
@@ -945,7 +993,6 @@ def recurring_training_api(request):
     Query params:
       - subject_id (required)
       - window: all | 90 | 30 | expired   (default: all)
-      - validity_days: int (default: 365)  (optional, but useful later)
     """
     subject_id = request.GET.get("subject_id")
     window = (request.GET.get("window") or "all").strip().lower()
@@ -965,13 +1012,15 @@ def recurring_training_api(request):
     validity_days = subject.validity_days
     today = timezone.localdate()
 
-    # One row per person: find their latest completion for that subject
+    # ✅ One row per person: latest completion for that subject
+    # ✅ IMPORTANT: ignore soft-removed participations
     rows = (
         Participation.objects
         .filter(
             role="TRAINEE",
             training__subject_id=subject_id,
             person__is_active=True,
+            removed_at__isnull=True,   # <-- THIS FIXES YOUR ISSUE
         )
         .values(
             "person_id",
@@ -987,7 +1036,6 @@ def recurring_training_api(request):
     for r in rows:
         last_end_at = r["last_end_at"]
         if not last_end_at:
-            # Shouldn’t happen due to Max, but keep safe
             continue
 
         last_completed = timezone.localtime(last_end_at).date()
@@ -1008,7 +1056,6 @@ def recurring_training_api(request):
             continue
         if window == "90" and not (0 <= days_remaining <= 90):
             continue
-        # window == "all" -> include everything
 
         results.append({
             "person_id": r["person_id"],
@@ -1035,7 +1082,6 @@ def recurring_training_api(request):
             "subject": subject.name,
         }
     })
-
 
 @login_required
 def my_history(request):
@@ -1921,3 +1967,4 @@ def training_list(request):
             "today": today,
         },
     )
+

@@ -111,6 +111,15 @@ class Participation(models.Model):
     feedback = models.TextField(blank=True, default="")
     pos_comment = models.TextField(blank=True, default="")
 
+    removed_at = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="removed_participations",
+    )
+    removed_reason = models.TextField(blank=True, default="")
+
     class Meta:
         unique_together = [("person", "training", "role")]
         indexes = [

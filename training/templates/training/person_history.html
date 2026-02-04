@@ -49,6 +49,13 @@
       font-weight: 700;
       letter-spacing: .2px;
     }
+      .pill.danger{
+      background:#fee2e2;
+      border-color:#fecaca;
+      color:#991b1b;
+    }
+    .muted{ color: var(--muted); }
+
   </style>
 
   <div class="card">
@@ -159,4 +166,62 @@
       </table>
     </div>
   </div>
+    {% if removed %}
+    <div style="height:14px;"></div>
+
+    <div class="card">
+      <h2 style="margin:0 0 12px;">Removed trainings</h2>
+
+      <div class="table-wrap">
+        <table class="pretty">
+          <thead>
+            <tr>
+              <th>Training</th>
+              <th>Role</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Removed</th>
+              <th>By</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in removed %}
+              <tr>
+                <td>
+                  <a href="{% url 'training_detail' p.training.id %}">
+                    <strong>{{ p.training.course_name }}</strong>
+                  </a>
+                </td>
+
+                <td><span class="pill danger">{{ p.role }}</span></td>
+
+                <td>{{ p.training.start_at }}</td>
+                <td>{{ p.training.end_at }}</td>
+
+                <td>{{ p.removed_at }}</td>
+
+                <td>
+                  {% if p.removed_by %}
+                    {{ p.removed_by }}
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if p.removed_reason %}
+                    {{ p.removed_reason }}
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
 {% endblock %}

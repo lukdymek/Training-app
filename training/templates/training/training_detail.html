@@ -249,13 +249,14 @@
               <a class="btn secondary small" href="{% url 'participation_edit' p.id %}">Edit</a>
               <a class="btn secondary small" href="{% url 'person_history' p.person.id %}">History</a>
 
-              <form method="post" action="{% url 'remove_participation' training.pk p.id %}" class="inlineform">
+              <form method="post"
+                    action="{% url 'remove_trainee' training.id p.person.id %}"
+                    onsubmit="return confirmRemoveReason(this);">
                 {% csrf_token %}
-                <button class="btn danger small" type="submit"
-                        onclick="return confirm('Remove this person from the training?')">
-                  Remove
-                </button>
+                <input type="hidden" name="reason" value="">
+                <button class="btn danger small" type="submit">Remove</button>
               </form>
+
             </div>
           </div>
         {% empty %}
@@ -393,13 +394,14 @@
 
               <a class="btn secondary small" href="{% url 'person_history' p.person.id %}">History</a>
 
-              <form method="post" action="{% url 'remove_participation' training.pk p.id %}" class="inlineform">
+              <form method="post"
+                    action="{% url 'remove_trainee' training.id p.person.id %}"
+                    onsubmit="return confirmRemoveReason(this);">
                 {% csrf_token %}
-                <button class="btn danger small" type="submit"
-                        onclick="return confirm('Remove this trainer from the training?')">
-                  Remove
-                </button>
+                <input type="hidden" name="reason" value="">
+                <button class="btn danger small" type="submit">Remove</button>
               </form>
+
             </div>
           </div>
         {% empty %}
@@ -551,6 +553,18 @@
         updateParticipationStatus(el);
       }
     });
+
+
+    
+    function confirmRemoveReason(form) {
+      const reason = prompt("Why is this person being removed from the training?");
+      if (reason === null) return false; // cancel
+
+      form.querySelector('input[name="reason"]').value = reason.trim();
+      return true;
+    }
+
+
   </script>
 
 {% endblock %}
