@@ -395,7 +395,7 @@
               <a class="btn secondary small" href="{% url 'person_history' p.person.id %}">History</a>
 
               <form method="post"
-                    action="{% url 'remove_trainee' training.id p.person.id %}"
+                    action="{% url 'remove_trainer' training.id p.person.id %}"
                     onsubmit="return confirmRemoveReason(this);">
                 {% csrf_token %}
                 <input type="hidden" name="reason" value="">

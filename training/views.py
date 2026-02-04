@@ -141,20 +141,25 @@ def training_detail(request, pk):
     else:
         available_trainers = Person.objects.none()
 
-    # exclude trainers already in this training
+    # ✅ exclude trainers already ACTIVE in this training
     existing_trainers = Participation.objects.filter(
-        training=training, role="TRAINER"
+        training=training,
+        role="TRAINER",
+        removed_at__isnull=True,
     ).values_list("person_id", flat=True)
 
     available_trainers = available_trainers.exclude(id__in=existing_trainers)
 
-    # exclude anyone busy in overlapping training (any role)
+    # ✅ exclude trainers busy in overlapping trainings (ACTIVE only)
     conflicting_people = Participation.objects.filter(
+        role="TRAINER",
+        removed_at__isnull=True,
         training__start_at__lt=end,
         training__end_at__gt=start,
     ).values_list("person_id", flat=True).distinct()
 
     available_trainers = available_trainers.exclude(id__in=conflicting_people)
+
 
     bulk_trainers_form = AddMultipleTrainersForm(queryset=available_trainers)
 
@@ -248,8 +253,29 @@ def add_trainer(request, pk):
                 messages.error(request, f"{person} is not approved to teach: {training.subject}")
                 return redirect("training_detail", pk=pk)
 
-        # Duplicate check
-        if Participation.objects.filter(training=training, person=person, role="TRAINER").exists():
+        # ✅ If there is an old removed participation, reactivate it (so person becomes available again)
+        old = Participation.objects.filter(
+            training=training,
+            person=person,
+            role="TRAINER",
+            removed_at__isnull=False,
+        ).order_by("-removed_at").first()
+
+        if old:
+            old.removed_at = None
+            old.removed_by = None
+            old.removed_reason = ""
+            old.save(update_fields=["removed_at", "removed_by", "removed_reason"])
+            messages.success(request, f"{person} re-added as trainer.")
+            return redirect("training_detail", pk=pk)
+
+        # ✅ Duplicate check must only consider ACTIVE trainers
+        if Participation.objects.filter(
+            training=training,
+            person=person,
+            role="TRAINER",
+            removed_at__isnull=True,
+        ).exists():
             messages.error(request, "This person is already a trainer for this training.")
             return redirect("training_detail", pk=pk)
 
@@ -258,8 +284,12 @@ def add_trainer(request, pk):
             messages.success(request, f"{person} added as trainer.")
         except ValidationError as e:
             messages.error(request, e.messages[0] if e.messages else "Validation error.")
+        except IntegrityError:
+            # if you have a unique constraint, this catches edge cases
+            messages.error(request, "Could not add trainer (already exists).")
 
     return redirect("training_detail", pk=pk)
+
 
 @login_required
 def calendar_view(request):
@@ -543,7 +573,7 @@ def report_person_export(request):
 def report_trainers(request):
     """
     Totals trainer days per trainer for a given month.
-    If days is empty, totals will be 0 (we can improve later).
+    Excludes trainers that were removed from trainings.
     """
     year = request.GET.get("year", "").strip()
     month = request.GET.get("month", "").strip()
@@ -553,24 +583,28 @@ def report_trainers(request):
     m = int(month) if month.isdigit() else now.month
 
     start = datetime(y, m, 1)
-    # next month boundary
-    if m == 12:
-        end = datetime(y + 1, 1, 1)
-    else:
-        end = datetime(y, m + 1, 1)
+    end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
 
-    qs = (Participation.objects
-          .filter(role="TRAINER", training__start_at__gte=start, training__start_at__lt=end)
-          .select_related("person")
-          .values("person__id", "person__sysper_id", "person__last_name", "person__first_name")
-          .annotate(total_days=Sum("days"))
-          .order_by("person__last_name", "person__first_name"))
+    qs = (
+        Participation.objects
+        .filter(
+            role="TRAINER",
+            removed_at__isnull=True,  # ✅ IMPORTANT
+            training__start_at__gte=start,
+            training__start_at__lt=end,
+        )
+        .select_related("person")
+        .values("person__id", "person__sysper_id", "person__last_name", "person__first_name")
+        .annotate(total_days=Sum("days"))
+        .order_by("person__last_name", "person__first_name")
+    )
 
     return render(request, "training/report_trainers.html", {
         "year": y,
         "month": m,
         "rows": qs,
     })
+
 
 @login_required
 @staff_required
@@ -585,12 +619,19 @@ def report_trainers_export(request):
     start = datetime(y, m, 1)
     end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
 
-    qs = (Participation.objects
-          .filter(role="TRAINER", training__start_at__gte=start, training__start_at__lt=end)
-          .select_related("person")
-          .values("person__sysper_id", "person__last_name", "person__first_name")
-          .annotate(total_days=Sum("days"))
-          .order_by("person__last_name", "person__first_name"))
+    qs = (
+        Participation.objects
+        .filter(
+            role="TRAINER",
+            removed_at__isnull=True,  # ✅ IMPORTANT
+            training__start_at__gte=start,
+            training__start_at__lt=end,
+        )
+        .select_related("person")
+        .values("person__sysper_id", "person__last_name", "person__first_name")
+        .annotate(total_days=Sum("days"))
+        .order_by("person__last_name", "person__first_name")
+    )
 
     resp = HttpResponse(content_type="text/csv")
     resp["Content-Disposition"] = f'attachment; filename="trainer_days_{y:04d}_{m:02d}.csv"'
@@ -607,23 +648,24 @@ def report_trainers_export(request):
 
     return resp
 
+
 @login_required
 @staff_required
 @require_POST
 def update_trainer_days(request, pk, participation_id):
     training = get_object_or_404(Training, pk=pk)
 
-    # Make sure we only edit TRAINER participations for THIS training
+    # ✅ Make sure we only edit ACTIVE trainer participations for THIS training
     p = get_object_or_404(
         Participation,
         pk=participation_id,
         training=training,
         role="TRAINER",
+        removed_at__isnull=True,  # ✅ IMPORTANT
     )
 
     raw = (request.POST.get("days") or "").strip().replace(",", ".")
     if raw == "":
-        # allow clearing
         p.days = None
         p.save(update_fields=["days"])
         messages.success(request, f"Days cleared for {p.person}.")
@@ -677,8 +719,11 @@ def people_search(request, pk):
 
     # exclude already added for this role
     existing_person_ids = Participation.objects.filter(
-        training=training, role=role
+        training=training,
+        role=role,
+        removed_at__isnull=True,   # ✅ only active blocks search results
     ).values_list("person_id", flat=True)
+
     people = people.exclude(id__in=existing_person_ids)
 
     # if adding TRAINER and training has subject -> only show approved trainers
@@ -713,26 +758,33 @@ def remove_trainee(request, pk, person_id):
     training = get_object_or_404(Training, pk=pk)
     reason = (request.POST.get("reason") or "").strip()
 
-    # remove from this training
-    qs = Participation.objects.filter(
+    p = get_object_or_404(
+        Participation,
         training=training,
         person_id=person_id,
         role="TRAINEE",
         removed_at__isnull=True,
     )
-    _soft_remove_participations(qs, request.user, reason)
 
-    # ALSO remove from future trainings in the same recurring series (if this training is recurring)
+    p.removed_at = timezone.now()
+    p.removed_by = request.user
+    p.removed_reason = reason
+    p.save(update_fields=["removed_at", "removed_by", "removed_reason"])
+
+    # Also remove from future instances in the same recurring series (only if they exist)
     series = getattr(training, "recurring_training", None)
     if series is not None:
-        future_qs = Participation.objects.filter(
+        Participation.objects.filter(
             person_id=person_id,
             role="TRAINEE",
-            training__recurring_training=series,
+            training__recurring_training=series,   # adjust if your field name differs
             training__start_at__gt=training.start_at,
             removed_at__isnull=True,
+        ).update(
+            removed_at=timezone.now(),
+            removed_by=request.user,
+            removed_reason=reason,
         )
-        _soft_remove_participations(future_qs, request.user, reason)
 
     messages.success(request, "Trainee removed from training.")
     return redirect("training_detail", pk=pk)
@@ -751,21 +803,20 @@ def remove_trainer(request, pk, person_id):
         role="TRAINER",
         removed_at__isnull=True,
     )
-    _soft_remove_participations(qs, request.user, reason)
 
-    series = getattr(training, "recurring_training", None)
-    if series is not None:
-        future_qs = Participation.objects.filter(
-            person_id=person_id,
-            role="TRAINER",
-            training__recurring_training=series,
-            training__start_at__gt=training.start_at,
-            removed_at__isnull=True,
-        )
-        _soft_remove_participations(future_qs, request.user, reason)
+    updated = qs.update(
+        removed_at=timezone.now(),
+        removed_by=request.user,
+        removed_reason=reason,
+    )
 
-    messages.success(request, "Trainer removed from training.")
+    if updated == 0:
+        messages.warning(request, "No active trainer participation found to remove.")
+    else:
+        messages.success(request, "Trainer removed from training.")
+
     return redirect("training_detail", pk=pk)
+
 
 
 @login_required
@@ -788,7 +839,6 @@ def remove_participation(request, pk, participation_id):
 def add_trainers_bulk(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
-    # Build the same available queryset used on the page (see section 3)
     start = training.start_at
     end = training.end_at
 
@@ -799,16 +849,22 @@ def add_trainers_bulk(request, pk):
     else:
         available_qs = available_qs.none()
 
-    # exclude people already in this training as TRAINER
-    existing_trainers = Participation.objects.filter(training=training, role="TRAINER").values_list("person_id", flat=True)
+    # ✅ exclude people already ACTIVE in this training as TRAINER
+    existing_trainers = Participation.objects.filter(
+        training=training,
+        role="TRAINER",
+        removed_at__isnull=True,
+    ).values_list("person_id", flat=True)
+
     available_qs = available_qs.exclude(id__in=existing_trainers)
 
-    # exclude people who are participating in ANY training that overlaps
+    # ✅ exclude people who are ACTIVE in ANY training that overlaps
     conflicting_people = Participation.objects.filter(
+        role="TRAINER",
+        removed_at__isnull=True,
         training__start_at__lt=end,
         training__end_at__gt=start,
     ).values_list("person_id", flat=True).distinct()
-
     available_qs = available_qs.exclude(id__in=conflicting_people)
 
     form = AddMultipleTrainersForm(request.POST, queryset=available_qs)
@@ -819,18 +875,36 @@ def add_trainers_bulk(request, pk):
 
     selected = list(form.cleaned_data["trainers"])
     added = 0
+    reactivated = 0
     skipped = 0
 
     for person in selected:
+        # ✅ If there is a previously removed participation for this training+person+role, reactivate it
+        p = Participation.objects.filter(
+            training=training,
+            person=person,
+            role="TRAINER",
+            removed_at__isnull=False,
+        ).order_by("-removed_at").first()
+
+        if p:
+            p.removed_at = None
+            p.removed_by = None
+            p.removed_reason = ""
+            p.save(update_fields=["removed_at", "removed_by", "removed_reason"])
+            reactivated += 1
+            continue
+
         try:
             Participation.objects.create(training=training, person=person, role="TRAINER")
             added += 1
         except IntegrityError:
-            # already exists or overlaps constraint hit
             skipped += 1
 
     if added:
         messages.success(request, f"Added {added} trainer(s).")
+    if reactivated:
+        messages.success(request, f"Re-activated {reactivated} previously removed trainer(s).")
     if skipped:
         messages.warning(request, f"Skipped {skipped} trainer(s) (already added or conflicting).")
 
