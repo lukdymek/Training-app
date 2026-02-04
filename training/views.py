@@ -50,7 +50,7 @@ from django.forms import modelformset_factory
 from .models import UseOfForceStandard, UofAssessment, UofRating
 from .forms import UseOfForceStandardForm
 from .docx_utils import fill_bookmarks
-
+import logging
 from datetime import date
 from django.contrib.staticfiles import finders
 
@@ -59,7 +59,7 @@ from django.contrib.staticfiles import finders
 
 CODE_TTL_MINUTES = 15
 RESEND_COOLDOWN_SECONDS = 60
-
+logger = logging.getLogger(__name__)
 
 def staff_required(view_func):
     @wraps(view_func)
@@ -1062,16 +1062,20 @@ def custom_403(request, exception=None):
 def _send_verification_code(email: str) -> str:
     code = f"{random.randint(0, 999999):06d}"
     try:
+        logger.warning("EMAIL_BACKEND=%s DEFAULT_FROM_EMAIL=%s", settings.EMAIL_BACKEND, settings.DEFAULT_FROM_EMAIL)
+
         send_mail(
-            subject="Your Training App verification code",
-            message=f"Your verification code is: {code}\n\nIt expires in 15 minutes.",
-            from_email=None,
+            subject="Your verification code",
+            message=f"Your verification code is: {code}",
+            from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[email],
-            fail_silently=False,
+            fail_silently=False,   # IMPORTANT
         )
+        return code
+
     except Exception:
-        # Don’t crash the request / worker
-        raise RuntimeError("Email sending failed. Please try again in a minute.")
+        logger.exception("Verification email send failed")  # IMPORTANT
+        raise  # TEMPORARY: let it show in Railway logs while debugging
     return code
 
 
