@@ -108,42 +108,7 @@ def login_view(request):
 
     return render(request, "training/login.html", {"next": request.GET.get("next", "")})
 
-@login_required
-@staff_required
-def training_list(request):
-    today = timezone.localdate()
 
-    qs = (
-        Training.objects.all()
-        .annotate(
-            trainee_count=Count(
-                "participation",
-                filter=Q(participation__role="TRAINEE"),
-                distinct=True,
-            ),
-            trainer_count=Count(
-                "participation",
-                filter=Q(participation__role="TRAINER"),
-                distinct=True,
-            ),
-        )
-        .order_by("-start_at")
-    )
-
-    current_trainings = qs.filter(start_at__date__lte=today, end_at__date__gte=today).order_by("start_at")
-    future_trainings = qs.filter(start_at__date__gt=today).order_by("start_at")
-    completed_trainings = qs.filter(end_at__date__lt=today).order_by("-start_at")
-
-    return render(
-        request,
-        "training/training_list.html",
-        {
-            "current_trainings": current_trainings,
-            "future_trainings": future_trainings,
-            "completed_trainings": completed_trainings,
-            "today": today,
-        },
-    )
 
 @login_required
 @staff_required
@@ -1907,23 +1872,48 @@ def uof_export_docx_all_zip(request, training_id: int):
 @login_required
 @staff_required
 def training_list(request):
-    now = timezone.now()
+    today = timezone.localdate()
+    print(">>> TRAINING_LIST VIEW CALLED <<<")
+    qs = (
+        Training.objects.all()
+        .annotate(
+            trainee_count=Count(
+                "participation",
+                filter=Q(participation__role="TRAINEE"),
+                distinct=True,
+            ),
+            trainer_count=Count(
+                "participation",
+                filter=Q(participation__role="TRAINER"),
+                distinct=True,
+            ),
+        )
+    )
 
-    # Adjust these filters to match how you define "completed"
-    # Usually completed = end_at < now
-    future_qs = Training.objects.filter(start_at__gt=now).order_by("start_at")
-    current_qs = Training.objects.filter(start_at__lte=now, end_at__gte=now).order_by("start_at")
+    current_trainings = qs.filter(
+        start_at__date__lte=today,
+        end_at__date__gte=today,
+    ).order_by("start_at")
 
-    completed_qs = Training.objects.filter(end_at__lt=now).order_by("-end_at")
+    future_trainings = qs.filter(
+        start_at__date__gt=today,
+    ).order_by("start_at")
 
-    # Paginate completed only
+    completed_qs = qs.filter(
+        end_at__date__lt=today,
+    ).order_by("-start_at")
+
     paginator = Paginator(completed_qs, 20)
     page_number = request.GET.get("completed_page") or 1
     completed_page = paginator.get_page(page_number)
 
-    context = {
-        "future_trainings": future_qs,
-        "current_trainings": current_qs,
-        "completed_page": completed_page,   # page object
-    }
-    return render(request, "training/training_list.html", context)
+    return render(
+        request,
+        "training/training_list.html",
+        {
+            "current_trainings": current_trainings,
+            "future_trainings": future_trainings,
+            "completed_page": completed_page,
+            "today": today,
+        },
+    )

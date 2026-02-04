@@ -149,10 +149,10 @@
           <span><strong>Where:</strong> {{ t.location }}</span>
 
           <span class="pill">
-            Trainees: {{ t.trainee_count }}{% if t.capacity %}/{{ t.capacity }}{% endif %}
+           Trainees: {{ t.trainee_count|default:0 }}{% if t.capacity %}/{{ t.capacity }}{% endif %}
           </span>
 
-          <span class="pill">Trainers: {{ t.trainer_count }}</span>
+          <span class="pill">Trainers: {{ t.trainer_count|default:0 }}</span>
         </div>
       </div>
 
