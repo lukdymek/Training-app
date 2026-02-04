@@ -15,6 +15,11 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "calendar"   # where to send users after login
 LOGOUT_REDIRECT_URL = "login"
 
+# -----------------------------
+# Email configuration
+# -----------------------------
+
+# Load .env locally (Railway injects env vars automatically)
 if os.environ.get("RAILWAY_ENVIRONMENT") is None:
     try:
         from dotenv import load_dotenv
@@ -25,20 +30,47 @@ if os.environ.get("RAILWAY_ENVIRONMENT") is None:
 
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
-    "django.core.mail.backends.console.EmailBackend"
+    "django.core.mail.backends.console.EmailBackend",
 )
 
-if EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
+
+# ---- Mailgun via django-anymail ----
+if EMAIL_BACKEND == "anymail.backends.mailgun.EmailBackend":
+
+    
+
+    ANYMAIL = {
+        "MAILGUN_API_KEY": os.environ.get("MAILGUN_API_KEY", ""),
+        "MAILGUN_SENDER_DOMAIN": os.environ.get("MAILGUN_DOMAIN", ""),
+    }
+
+    DEFAULT_FROM_EMAIL = os.environ.get(
+        "DEFAULT_FROM_EMAIL",
+        f"Training App <postmaster@{os.environ.get('MAILGUN_DOMAIN', 'example.com')}>",
+    )
+
+
+# ---- SMTP fallback (gmail etc) ----
+elif EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
+
     EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
     EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
     EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
     EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
     EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() == "true"
-    DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Training App <no-reply@yourdomain.com>")
+
+    DEFAULT_FROM_EMAIL = os.environ.get(
+        "DEFAULT_FROM_EMAIL",
+        "Training App <no-reply@yourdomain.com>",
+    )
+
+
+# ---- Console backend (dev default) ----
 else:
-    DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "Training App <no-reply@example.com>")
-
-
+    DEFAULT_FROM_EMAIL = os.environ.get(
+        "DEFAULT_FROM_EMAIL",
+        "Training App <no-reply@example.com>",
+    )
 
 
 
@@ -118,6 +150,8 @@ INSTALLED_APPS = [
     "django.contrib.postgres",
     "auditlog",
     "training",
+    "anymail"
+    
 ]
 
 

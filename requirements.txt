@@ -15,4 +15,5 @@ whitenoise==6.11.0
 python-docx
 lxml
 django-auditlog
+django-anymail[mailgun]
 
