@@ -1903,3 +1903,27 @@ def uof_export_docx_all_zip(request, training_id: int):
     resp = HttpResponse(out.getvalue(), content_type="application/zip")
     resp["Content-Disposition"] = f'attachment; filename="uof_training_{training.id}_cards.zip"'
     return resp
+
+@login_required
+@staff_required
+def training_list(request):
+    now = timezone.now()
+
+    # Adjust these filters to match how you define "completed"
+    # Usually completed = end_at < now
+    future_qs = Training.objects.filter(start_at__gt=now).order_by("start_at")
+    current_qs = Training.objects.filter(start_at__lte=now, end_at__gte=now).order_by("start_at")
+
+    completed_qs = Training.objects.filter(end_at__lt=now).order_by("-end_at")
+
+    # Paginate completed only
+    paginator = Paginator(completed_qs, 20)
+    page_number = request.GET.get("completed_page") or 1
+    completed_page = paginator.get_page(page_number)
+
+    context = {
+        "future_trainings": future_qs,
+        "current_trainings": current_qs,
+        "completed_page": completed_page,   # page object
+    }
+    return render(request, "training/training_list.html", context)

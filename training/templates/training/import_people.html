@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <h1>Import People from Excel</h1>
+
+  <p>Upload an Opera Evo export (.xlsx). You will see a preview before importing.</p>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="default" type="submit">Upload and preview</button>
+    <a href=".." style="margin-left:12px;">Cancel</a>
+  </form>
+{% endblock %}

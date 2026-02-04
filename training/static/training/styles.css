@@ -239,3 +239,60 @@ textarea{min-height: 110px; resize: vertical}
   border-color: #bae6fd !important;
   color: #075985 !important;
 }
+
+
+/* ===== Topbar nav dropdown ===== */
+.nav-dropdown{
+  position: relative;
+  display: inline-block;
+}
+
+.nav-dropbtn{
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.nav-dropbtn:hover{
+  background: rgba(255,255,255,0.08);
+}
+
+.nav-dropdown-content{
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  z-index: 9999;
+}
+
+.nav-dropdown-content a{
+  display: block;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.nav-dropdown-content a:hover{
+  background: rgba(255,255,255,0.08);
+}
+
+/* show dropdown on hover */
+.nav-dropdown:hover .nav-dropdown-content{
+  display: block;
+}
+
+/* also show when keyboard focusing the button */
+.nav-dropdown:focus-within .nav-dropdown-content{
+  display: block;
+}

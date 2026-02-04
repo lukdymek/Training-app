@@ -53,7 +53,7 @@ urlpatterns = [
     path("trainings/<int:pk>/uof/results/", views.uof_results, name="uof_results"), 
     path("trainings/<int:training_id>/uof/export/<int:participation_id>/docx/", views.uof_export_docx_one, name="uof_export_docx_one"),
     path("trainings/<int:training_id>/uof/export/all.zip", views.uof_export_docx_all_zip, name="uof_export_docx_all_zip"),
-
+    
 
 
 

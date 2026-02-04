@@ -133,34 +133,85 @@
       <hr style="margin: 10px 0 4px; border:0; border-top:1px solid var(--border);">
 
       <h2 style="margin:0 0 6px;">Completed trainings</h2>
-      {% for t in completed_trainings %}
-        <div class="train-row">
-          <div class="train-left">
-            <div class="train-title">
-              <a href="{% url 'training_detail' t.pk %}">{{ t.course_name }}{% if t.subject %} – {{ t.subject }}{% endif %}</a>
-            </div>
 
-            <div class="train-meta">
-              <span><strong>When:</strong> {{ t.start_at }} → {{ t.end_at }}</span>
-              <span><strong>Where:</strong> {{ t.location }}</span>
-
-              <span class="pill">
-                Trainees: {{ t.trainee_count }}{% if t.capacity %}/{{ t.capacity }}{% endif %}
-              </span>
-
-              <span class="pill">Trainers: {{ t.trainer_count }}</span>
-
-            </div>
-          </div>
-
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
-            <a class="btn secondary small" href="{% url 'training_detail' t.pk %}">Open</a>
-            <a class="btn secondary small" href="{% url 'training_edit' t.pk %}">Edit</a>
-          </div>
+<div id="completed-list">
+  {% for t in completed_page.object_list %}
+    <div class="train-row">
+      <div class="train-left">
+        <div class="train-title">
+          <a href="{% url 'training_detail' t.pk %}">
+            {{ t.course_name }}{% if t.subject %} – {{ t.subject }}{% endif %}
+          </a>
         </div>
-      {% empty %}
-        <div style="color:var(--muted);">No completed trainings.</div>
-      {% endfor %}
+
+        <div class="train-meta">
+          <span><strong>When:</strong> {{ t.start_at }} → {{ t.end_at }}</span>
+          <span><strong>Where:</strong> {{ t.location }}</span>
+
+          <span class="pill">
+            Trainees: {{ t.trainee_count }}{% if t.capacity %}/{{ t.capacity }}{% endif %}
+          </span>
+
+          <span class="pill">Trainers: {{ t.trainer_count }}</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+        <a class="btn secondary small" href="{% url 'training_detail' t.pk %}">Open</a>
+        <a class="btn secondary small" href="{% url 'training_edit' t.pk %}">Edit</a>
+      </div>
+    </div>
+  {% empty %}
+    <div style="color:var(--muted);">No completed trainings.</div>
+  {% endfor %}
+</div>
+
+{% if completed_page.has_next %}
+  <div style="margin-top:12px; display:flex; justify-content:center;">
+    <a id="load-more"
+       class="btn secondary"
+       href="?completed_page={{ completed_page.next_page_number }}">
+      Load 20 more
+    </a>
+    <script>
+  (function(){
+    const btn = document.getElementById("load-more");
+    if (!btn) return;
+
+    const observer = new IntersectionObserver(async (entries) => {
+      if (!entries[0].isIntersecting) return;
+
+      // fetch next page HTML
+      const url = btn.getAttribute("href");
+      const res = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      const html = await res.text();
+
+      // Parse returned HTML and append completed items
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html;
+
+      const newItems = tmp.querySelector("#completed-list");
+      const newBtn = tmp.querySelector("#load-more");
+
+      if (newItems) {
+        document.querySelector("#completed-list").insertAdjacentHTML("beforeend", newItems.innerHTML);
+      }
+
+      if (newBtn) {
+        btn.setAttribute("href", newBtn.getAttribute("href"));
+      } else {
+        btn.remove();
+        observer.disconnect();
+      }
+    }, { rootMargin: "200px" });
+
+    observer.observe(btn);
+  })();
+</script>
+
+  </div>
+{% endif %}
+
 
     </div>
   </div>

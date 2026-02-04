@@ -9,3 +9,4 @@ class TrainingConfig(AppConfig):
         from django.conf import settings
         from .constants import SYSPER_LABEL
         settings.SYSPER_LABEL = SYSPER_LABEL
+        import training.auditlog_registry 

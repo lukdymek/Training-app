@@ -31,11 +31,7 @@
         <p class="help" style="margin:0;">Browse trainings, filter by subject/location, click a day to create a new training.</p>
       </div>
 
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        {% if request.user.is_staff %}
-      <a class="btn" href="{% url 'training_create' %}">Add training</a>
-      {% endif %}
-      </div>
+      
     </div>
 
     <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
