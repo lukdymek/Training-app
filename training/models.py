@@ -10,7 +10,7 @@ from django.db.models import F
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
-
+from django.contrib.postgres.fields.ranges import RangeOperators
 
 class Person(models.Model):
     sysper_id = models.BigIntegerField(unique=True, db_index=True)
@@ -111,6 +111,7 @@ class Participation(models.Model):
     feedback = models.TextField(blank=True, default="")
     pos_comment = models.TextField(blank=True, default="")
 
+    # ---- Soft removal ----
     removed_at = models.DateTimeField(null=True, blank=True)
     removed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -123,7 +124,7 @@ class Participation(models.Model):
     class Meta:
         unique_together = [("person", "training", "role")]
         indexes = [
-            GistIndex(fields=["timespan"]),  # ✅ only timespan
+            GistIndex(fields=["timespan"]),
         ]
         constraints = [
             ExclusionConstraint(
@@ -132,35 +133,41 @@ class Participation(models.Model):
                     ("person", "="),
                     ("timespan", "&&"),
                 ],
+                condition=Q(removed_at__isnull=True),  # ✅ IMPORTANT: ignore removed rows at DB level
             )
         ]
+
     def clean(self):
-        if not self.person_id or not self.training_id:
+        super().clean()
+
+        # If training not set yet, skip
+        if not self.training_id:
             return
 
-        qs = (
-            Participation.objects
-            .filter(person=self.person)
-            .exclude(pk=self.pk)
-            .filter(
-                training__start_at__lt=self.training.end_at,
-                training__end_at__gt=self.training.start_at,
-            )
-            .select_related("training")
-        )
+        # Ensure we have training times
+        if not self.training.start_at or not self.training.end_at:
+            return
 
-        if qs.exists():
-            conflict = qs.first().training
-            raise ValidationError(
-                f"Overlap: {self.person} already has '{conflict.course_name}' "
-                f"({conflict.start_at} - {conflict.end_at})"
-            )
+        # Keep timespan aligned (also done in save, but good for validation)
+        self.timespan = Range(self.training.start_at, self.training.end_at, bounds='[)')
 
-   
-            
+        # Ignore removed participations and ignore self
+        overlaps = Participation.objects.filter(
+            person=self.person,
+            removed_at__isnull=True,
+            timespan__overlap=self.timespan,
+        ).exclude(pk=self.pk)
+
+        if overlaps.exists():
+            other = overlaps.select_related("training").first().training
+            raise ValidationError({
+                "__all__": [
+                    f"Overlap: {self.person} already has '{other.course_name}' ({other.start_at} - {other.end_at})"
+                ]
+            })
 
     def save(self, *args, **kwargs):
-        # ✅ Always sync range from training dates
+        # Always sync range from training dates
         self.timespan = Range(self.training.start_at, self.training.end_at, bounds='[)')
         self.full_clean()
         super().save(*args, **kwargs)

@@ -141,14 +141,14 @@ def training_detail(request, pk):
     else:
         available_trainers = Person.objects.none()
 
-    # ✅ exclude trainers already ACTIVE in this training
-    existing_trainers = Participation.objects.filter(
+    # STEP 1: exclude anyone already ACTIVE in this training (trainee or trainer)
+    existing_people = Participation.objects.filter(
         training=training,
-        role="TRAINER",
         removed_at__isnull=True,
     ).values_list("person_id", flat=True)
 
-    available_trainers = available_trainers.exclude(id__in=existing_trainers)
+    available_trainers = available_trainers.exclude(id__in=existing_people)
+
 
     # ✅ exclude trainers busy in overlapping trainings (ACTIVE only)
     conflicting_people = Participation.objects.filter(
@@ -181,52 +181,66 @@ def training_detail(request, pk):
 
 @login_required
 @staff_required
+@require_POST
 def add_trainee(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
-    if request.method == "POST":
-        sysper_id = request.POST.get("sysper_id", "").strip()
+    sysper_id = (request.POST.get("sysper_id") or "").strip()
+    if not sysper_id.isdigit():
+        messages.error(request, f"Invalid {SYSPER_LABEL}.")
+        return redirect("training_detail", pk=pk)
 
-        if not sysper_id.isdigit():
-            messages.error(request, f"Invalid {SYSPER_LABEL}.")
-            return redirect("training_detail", pk=pk)
+    try:
+        person = Person.objects.get(sysper_id=int(sysper_id))
+    except Person.DoesNotExist:
+        messages.error(request, "Person not found.")
+        return redirect("training_detail", pk=pk)
+    
+    # STEP 1: If person is already ACTIVE in this training in ANY role, do not add/reactivate
+    if Participation.objects.filter(
+        training=training,
+        person=person,
+        removed_at__isnull=True,
+    ).exists():
+        messages.error(request, "This person is already participating in this training (as trainee or trainer).")
+        return redirect("training_detail", pk=pk)
+
+
+    # ✅ If previously removed as TRAINEE for this training, reactivate
+    old = Participation.objects.filter(
+        training=training,
+        person=person,
+        role="TRAINEE",
+        removed_at__isnull=False,
+    ).order_by("-removed_at").first()
+
+    if old:
+        old.removed_at = None
+        old.removed_by = None
+        old.removed_reason = ""
 
         try:
-            person = Person.objects.get(sysper_id=int(sysper_id))
-        except Person.DoesNotExist:
-            messages.error(request, "Person not found.")
-            return redirect("training_detail", pk=pk)
-
-        # Capacity check
-        trainee_count = Participation.objects.filter(
-            training=training, role="TRAINEE"
-        ).count()
-
-        if trainee_count >= training.capacity:
-            messages.error(request, "Training is already full.")
-            return redirect("training_detail", pk=pk)
-
-        # Duplicate check
-        if Participation.objects.filter(
-            training=training, person=person, role="TRAINEE"
-        ).exists():
-            messages.error(request, "This person is already a trainee.")
-            return redirect("training_detail", pk=pk)
-
-        # Create participation (overlap check runs automatically)
-        try:
-            Participation.objects.create(
-                training=training,
-                person=person,
-                role="TRAINEE",
+            old.save(update_fields=["removed_at", "removed_by", "removed_reason"])
+            messages.success(request, f"{person} re-added as trainee.")
+        except ValidationError:
+            messages.error(
+                request,
+                "This person is already participating in this training in another role."
             )
-            messages.success(request, f"{person} added as trainee.")
-        except ValidationError as e:
-            # Extract clean message (no '__all__')
-            msg = e.messages[0] if e.messages else "Validation error."
-            messages.error(request, msg)
+
+        return redirect("training_detail", pk=pk)
+
+
+    try:
+        Participation.objects.create(training=training, person=person, role="TRAINEE")
+        messages.success(request, f"{person} added as trainee.")
+    except ValidationError as e:
+        messages.error(request, e.messages[0] if e.messages else "Validation error.")
+    except IntegrityError:
+        messages.error(request, "Could not add trainee (already exists).")
 
     return redirect("training_detail", pk=pk)
+
 
 @login_required
 @staff_required
@@ -849,18 +863,16 @@ def add_trainers_bulk(request, pk):
     else:
         available_qs = available_qs.none()
 
-    # ✅ exclude people already ACTIVE in this training as TRAINER
-    existing_trainers = Participation.objects.filter(
+    # STEP 2: exclude anyone already ACTIVE in this training (trainee or trainer)
+    existing_people = Participation.objects.filter(
         training=training,
-        role="TRAINER",
         removed_at__isnull=True,
     ).values_list("person_id", flat=True)
+    available_qs = available_qs.exclude(id__in=existing_people)
 
-    available_qs = available_qs.exclude(id__in=existing_trainers)
 
-    # ✅ exclude people who are ACTIVE in ANY training that overlaps
+    # ✅ exclude people who are ACTIVE in overlapping trainings as TRAINER
     conflicting_people = Participation.objects.filter(
-        role="TRAINER",
         removed_at__isnull=True,
         training__start_at__lt=end,
         training__end_at__gt=start,
@@ -868,7 +880,6 @@ def add_trainers_bulk(request, pk):
     available_qs = available_qs.exclude(id__in=conflicting_people)
 
     form = AddMultipleTrainersForm(request.POST, queryset=available_qs)
-
     if not form.is_valid():
         messages.error(request, "Please select trainers from the available list.")
         return redirect("training_detail", pk=pk)
@@ -877,6 +888,7 @@ def add_trainers_bulk(request, pk):
     added = 0
     reactivated = 0
     skipped = 0
+    overlap_messages = []
 
     for person in selected:
         # ✅ If there is a previously removed participation for this training+person+role, reactivate it
@@ -895,20 +907,53 @@ def add_trainers_bulk(request, pk):
             reactivated += 1
             continue
 
+        # ✅ If already participating in THIS training in any role (trainee/trainer), skip cleanly.
+        # (This avoids overlap validation noise and matches what you described you want.)
+        if Participation.objects.filter(
+            training=training,
+            person=person,
+            removed_at__isnull=True,
+        ).exists():
+            skipped += 1
+            overlap_messages.append(f"{person}: already participating in this training.")
+            continue
+
         try:
             Participation.objects.create(training=training, person=person, role="TRAINER")
             added += 1
+
+        except ValidationError as e:
+            skipped += 1
+
+            # Pull a useful message (your overlap logic often stores it in __all__)
+            msg_list = e.messages or []
+            if hasattr(e, "message_dict") and "__all__" in e.message_dict:
+                msg_list = e.message_dict["__all__"]
+
+            if msg_list:
+                overlap_messages.append(f"{person}: {msg_list[0]}")
+            else:
+                overlap_messages.append(f"{person}: cannot be added due to a validation rule.")
+
         except IntegrityError:
             skipped += 1
+            overlap_messages.append(f"{person}: already added or blocked by a database constraint.")
 
     if added:
         messages.success(request, f"Added {added} trainer(s).")
     if reactivated:
         messages.success(request, f"Re-activated {reactivated} previously removed trainer(s).")
     if skipped:
-        messages.warning(request, f"Skipped {skipped} trainer(s) (already added or conflicting).")
+        messages.warning(request, f"Skipped {skipped} trainer(s).")
+
+    # Optional: show a few specific reasons (helps admins understand what happened)
+    for line in overlap_messages[:3]:
+        messages.warning(request, line)
+    if len(overlap_messages) > 3:
+        messages.warning(request, f"...and {len(overlap_messages) - 3} more.")
 
     return redirect("training_detail", pk=pk)
+
 
 @login_required
 def person_history(request, person_id):
@@ -2003,15 +2048,22 @@ def training_list(request):
         .annotate(
             trainee_count=Count(
                 "participation",
-                filter=Q(participation__role="TRAINEE"),
+                filter=Q(
+                    participation__role="TRAINEE",
+                    participation__removed_at__isnull=True,   # ✅ add this
+                ),
                 distinct=True,
             ),
             trainer_count=Count(
                 "participation",
-                filter=Q(participation__role="TRAINER"),
+                filter=Q(
+                    participation__role="TRAINER",
+                    participation__removed_at__isnull=True,   # ✅ add this
+                ),
                 distinct=True,
             ),
         )
+        .order_by("-start_at")
     )
 
     current_trainings = qs.filter(
