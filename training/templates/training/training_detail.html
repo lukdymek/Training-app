@@ -169,6 +169,11 @@
         <div class="uof-meta-box">
           <div style="font-weight:800; margin-bottom:6px;">Use of Force details</div>
 
+          <div style="font-weight:800; margin-bottom:6px;"><span class="pill">Iteration: {{ training.uof_iteration }}</span></div>
+
+          
+
+
           <form method="post" action="{% url 'uof_update_meta' training.pk %}">
             {% csrf_token %}
             <div class="uof-meta-grid">

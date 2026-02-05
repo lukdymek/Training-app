@@ -115,23 +115,29 @@ def login_view(request):
 def training_detail(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
-    
     # total training duration in days (inclusive)
-    # Example: Jan 1 to Jan 4 => 4 days
     duration_days = (training.end_at.date() - training.start_at.date()).days + 1
     if duration_days < 1:
         duration_days = 1
 
-    trainees = Participation.objects.filter(
-        training=training, role="TRAINEE", removed_at__isnull=True,
-    ).select_related("person")
+    trainees = (
+        Participation.objects
+        .filter(training=training, role="TRAINEE", removed_at__isnull=True)
+        .select_related("person")
+    )
 
-    trainers = Participation.objects.filter(
-        training=training, role="TRAINER", removed_at__isnull=True,
-    ).select_related("person")
+    trainers = (
+        Participation.objects
+        .filter(training=training, role="TRAINER", removed_at__isnull=True)
+        .select_related("person")
+    )
 
     start = training.start_at
     end = training.end_at
+
+    # UOF flag
+    subj_name = ((training.subject.name if training.subject else "") or "").strip().lower()
+    is_uof = subj_name in ("use of force", "uof")
 
     # Build "available trainers" list
     if training.subject_id:
@@ -141,25 +147,21 @@ def training_detail(request, pk):
     else:
         available_trainers = Person.objects.none()
 
-    # STEP 1: exclude anyone already ACTIVE in this training (trainee or trainer)
+    # Exclude anyone already ACTIVE in this training (trainee or trainer)
     existing_people = Participation.objects.filter(
         training=training,
         removed_at__isnull=True,
     ).values_list("person_id", flat=True)
-
     available_trainers = available_trainers.exclude(id__in=existing_people)
 
-
-    # ✅ exclude trainers busy in overlapping trainings (ACTIVE only)
+    # Exclude people busy in overlapping trainings (ACTIVE only)
+    # (Your overlap rule is per-person regardless of role, so do not filter by role here.)
     conflicting_people = Participation.objects.filter(
-        role="TRAINER",
         removed_at__isnull=True,
         training__start_at__lt=end,
         training__end_at__gt=start,
     ).values_list("person_id", flat=True).distinct()
-
     available_trainers = available_trainers.exclude(id__in=conflicting_people)
-
 
     bulk_trainers_form = AddMultipleTrainersForm(queryset=available_trainers)
 
@@ -169,11 +171,8 @@ def training_detail(request, pk):
         "trainers": trainers,
         "available_trainers": available_trainers,
         "bulk_trainers_form": bulk_trainers_form,
-        "duration_days": duration_days, 
-        "is_uof": (
-        training.subject is not None
-        and (training.subject.name or "").strip().lower() == "use of force"
-    ),
+        "duration_days": duration_days,
+        "is_uof": is_uof,
     }
 
     return render(request, "training/training_detail.html", context)

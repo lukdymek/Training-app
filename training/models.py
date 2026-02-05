@@ -62,6 +62,19 @@ class Training(models.Model):
     uof_instructor_1 = models.CharField(max_length=120, blank=True, default="")
     uof_instructor_2 = models.CharField(max_length=120, blank=True, default="")
     uof_chairman = models.CharField(max_length=120, blank=True, default="")
+    uof_iteration = models.PositiveIntegerField(null=True, blank=True)
+
+    def clean(self):
+        super().clean()
+
+        subj = (getattr(self.subject, "name", "") or "").strip().lower()
+        is_uof = subj in ("use of force", "uof")
+
+        if is_uof and not self.uof_iteration:
+            raise ValidationError({"uof_iteration": "Iteration is required for Use of force trainings."})
+
+        if (not is_uof) and self.uof_iteration:
+            raise ValidationError({"uof_iteration": "Iteration should only be set for Use of force trainings."})
 
     class Meta:
         constraints = [

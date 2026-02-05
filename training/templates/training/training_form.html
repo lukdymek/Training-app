@@ -46,6 +46,15 @@
           {{ form.capacity }}
         </div>
 
+        <div id="uof-iteration-wrap">
+          {{ form.uof_iteration.label_tag }}
+          {{ form.uof_iteration }}
+          {% if form.uof_iteration.errors %}
+            <div class="help" style="color: var(--danger);">{{ form.uof_iteration.errors }}</div>
+          {% endif %}
+        </div>
+
+
         <div class="form-row full">
           <label for="{{ form.remarks.id_for_label }}">Remarks</label>
           {{ form.remarks }}
@@ -61,4 +70,25 @@
       </div>
     </form>
   </div>
+
+  <script>
+  (function () {
+    const subjectSelect = document.getElementById("id_subject");
+    const wrap = document.getElementById("uof-iteration-wrap");
+    if (!subjectSelect || !wrap) return;
+
+    function isUof() {
+      const txt = (subjectSelect.options[subjectSelect.selectedIndex]?.text || "").trim().toLowerCase();
+      return txt === "use of force" || txt === "uof";
+    }
+
+    function toggle() {
+      wrap.style.display = isUof() ? "" : "none";
+    }
+
+    subjectSelect.addEventListener("change", toggle);
+    toggle(); // initial
+  })();
+</script>
+
 {% endblock %}

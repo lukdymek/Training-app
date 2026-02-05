@@ -10,7 +10,7 @@ from .models import UseOfForceStandard
 class TrainingForm(forms.ModelForm):
     class Meta:
         model = Training
-        fields = ["course_name", "subject", "start_at", "end_at", "location", "capacity", "remarks"]
+        fields = ["course_name", "subject", "start_at", "end_at", "location", "capacity", "remarks", "uof_iteration"]
         widgets = {
             "start_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
             "end_at": forms.DateTimeInput(attrs={"type": "datetime-local"}),
