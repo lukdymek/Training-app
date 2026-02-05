@@ -195,8 +195,27 @@ def add_trainee(request, pk):
     except Person.DoesNotExist:
         messages.error(request, "Person not found.")
         return redirect("training_detail", pk=pk)
-    
-    # STEP 1: If person is already ACTIVE in this training in ANY role, do not add/reactivate
+
+    # ✅ Capacity enforcement for TRAINEES
+    # capacity None -> unlimited (if you ever use None)
+    # capacity 0 -> no trainees allowed (per your request)
+    if training.capacity is not None:
+        if training.capacity == 0:
+            messages.error(request, "This training does not allow trainees (capacity is 0).")
+            return redirect("training_detail", pk=pk)
+
+        if training.capacity > 0:
+            active_trainees = Participation.objects.filter(
+                training=training,
+                role="TRAINEE",
+                removed_at__isnull=True,
+            ).count()
+
+            if active_trainees >= training.capacity:
+                messages.error(request, f"Training is full (capacity {training.capacity} reached).")
+                return redirect("training_detail", pk=pk)
+
+    # ✅ If person is already ACTIVE in this training in ANY role, do not add/reactivate
     if Participation.objects.filter(
         training=training,
         person=person,
@@ -205,8 +224,7 @@ def add_trainee(request, pk):
         messages.error(request, "This person is already participating in this training (as trainee or trainer).")
         return redirect("training_detail", pk=pk)
 
-
-    # ✅ If previously removed as TRAINEE for this training, reactivate
+    # ✅ If previously removed as TRAINEE for this training, reactivate it
     old = Participation.objects.filter(
         training=training,
         person=person,
@@ -218,17 +236,26 @@ def add_trainee(request, pk):
         old.removed_at = None
         old.removed_by = None
         old.removed_reason = ""
-
         try:
             old.save(update_fields=["removed_at", "removed_by", "removed_reason"])
             messages.success(request, f"{person} re-added as trainee.")
-        except ValidationError:
-            messages.error(
-                request,
-                "This person is already participating in this training in another role."
-            )
-
+        except ValidationError as e:
+            # e.g. overlap constraint (shouldn’t happen for same training anymore, but safe)
+            msg = (e.messages[0] if getattr(e, "messages", None) else "Validation error.")
+            messages.error(request, msg)
         return redirect("training_detail", pk=pk)
+
+    # ✅ Otherwise create new participation
+    try:
+        Participation.objects.create(training=training, person=person, role="TRAINEE")
+        messages.success(request, f"{person} added as trainee.")
+    except ValidationError as e:
+        msg = (e.messages[0] if getattr(e, "messages", None) else "Validation error.")
+        messages.error(request, msg)
+    except IntegrityError:
+        messages.error(request, "Could not add trainee (already exists).")
+
+    return redirect("training_detail", pk=pk)
 
 
     try:
@@ -535,16 +562,19 @@ def report_person(request):
     if sysper.isdigit():
         person = Person.objects.filter(sysper_id=int(sysper)).first()
         if person:
-            rows = (Participation.objects
-                    .filter(person=person)
-                    .select_related("training", "training__subject")
-                    .order_by("-training__start_at"))
+            rows = (
+                Participation.objects
+                .filter(person=person, removed_at__isnull=True)  # ✅ only active participations
+                .select_related("training", "training__subject")
+                .order_by("-training__start_at")
+            )
 
     return render(request, "training/report_person.html", {
         "sysper": sysper,
         "person": person,
         "rows": rows,
     })
+
 
 @login_required
 @staff_required
