@@ -393,12 +393,15 @@
                   name="days"
                   step="0.5"
                   min="0"
-                  value="{{ p.days|default_if_none:'' }}"
+                  max="{{ duration_days }}"
+                  value="{% if p.days is not None %}{{ p.days }}{% else %}{{ duration_days }}{% endif %}"
                   placeholder="{{ duration_days }}"
+                  data-original="{% if p.days is not None %}{{ p.days }}{% else %}{{ duration_days }}{% endif %}"
                   style="max-width:90px;"
                   title="How many days this trainer teaches"
                 >
-                <button class="btn secondary small" type="submit">Save</button>
+                <button class="btn secondary small" type="submit" disabled data-save-days>Save</button>
+
               </form>
 
               <a class="btn secondary small" href="{% url 'person_history' p.person.id %}">History</a>
@@ -652,7 +655,36 @@
       return true;
     }
 
+    (function () {
+      function norm(v) {
+        v = (v || "").trim();
+        if (v === "") return "";
+        // normalize "1" and "1.0"
+        const n = Number(v);
+        return Number.isFinite(n) ? String(n) : v;
+      }
 
+      function wireDaysForm(form) {
+        const input = form.querySelector('input[name="days"]');
+        const btn = form.querySelector('button[data-save-days]');
+        if (!input || !btn) return;
+
+        const original = norm(input.dataset.original);
+        btn.disabled = true;
+
+        function refresh() {
+          const current = norm(input.value);
+          btn.disabled = (current === original);
+        }
+
+        input.addEventListener("input", refresh);
+        input.addEventListener("change", refresh);
+        refresh();
+      }
+
+      document.querySelectorAll('form[action*="update_trainer_days"]').forEach(wireDaysForm);
+    })();
   </script>
+
 
 {% endblock %}

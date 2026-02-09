@@ -316,6 +316,7 @@ def add_trainee(request, pk):
 @staff_required
 def add_trainer(request, pk):
     training = get_object_or_404(Training, pk=pk)
+    total_days = training_total_days(training)
 
     if request.method == "POST":
         sysper_id = request.POST.get("sysper_id", "").strip()
@@ -337,7 +338,7 @@ def add_trainer(request, pk):
                 messages.error(request, f"{person} is not approved to teach: {training.subject}")
                 return redirect("training_detail", pk=pk)
 
-        # ✅ If there is an old removed participation, reactivate it (so person becomes available again)
+        # Reactivate old removed participation
         old = Participation.objects.filter(
             training=training,
             person=person,
@@ -349,11 +350,16 @@ def add_trainer(request, pk):
             old.removed_at = None
             old.removed_by = None
             old.removed_reason = ""
-            old.save(update_fields=["removed_at", "removed_by", "removed_reason"])
+
+            # ✅ set days if missing
+            if old.days is None and total_days > 0:
+                old.days = total_days
+
+            old.save(update_fields=["removed_at", "removed_by", "removed_reason", "days"])
             messages.success(request, f"{person} re-added as trainer.")
             return redirect("training_detail", pk=pk)
 
-        # ✅ Duplicate check must only consider ACTIVE trainers
+        # Duplicate check (active only)
         if Participation.objects.filter(
             training=training,
             person=person,
@@ -364,15 +370,20 @@ def add_trainer(request, pk):
             return redirect("training_detail", pk=pk)
 
         try:
-            Participation.objects.create(training=training, person=person, role="TRAINER")
+            Participation.objects.create(
+                training=training,
+                person=person,
+                role="TRAINER",
+                days=(total_days if total_days > 0 else None),  # ✅ default days on create
+            )
             messages.success(request, f"{person} added as trainer.")
         except ValidationError as e:
             messages.error(request, e.messages[0] if e.messages else "Validation error.")
         except IntegrityError:
-            # if you have a unique constraint, this catches edge cases
             messages.error(request, "Could not add trainer (already exists).")
 
     return redirect("training_detail", pk=pk)
+
 
 
 @login_required
@@ -741,14 +752,15 @@ def report_trainers_export(request):
 @require_POST
 def update_trainer_days(request, pk, participation_id):
     training = get_object_or_404(Training, pk=pk)
+    max_days = training_total_days(training)
 
-    # ✅ Make sure we only edit ACTIVE trainer participations for THIS training
+    # only ACTIVE trainer participations for THIS training
     p = get_object_or_404(
         Participation,
         pk=participation_id,
         training=training,
         role="TRAINER",
-        removed_at__isnull=True,  # ✅ IMPORTANT
+        removed_at__isnull=True,
     )
 
     raw = (request.POST.get("days") or "").strip().replace(",", ".")
@@ -768,10 +780,36 @@ def update_trainer_days(request, pk, participation_id):
         messages.error(request, "Days cannot be negative.")
         return redirect("training_detail", pk=pk)
 
+    # ✅ Enforce max = total training days (if known)
+    if max_days > 0 and days > max_days:
+        messages.error(request, f"Days cannot be greater than the training duration ({max_days} days).")
+        return redirect("training_detail", pk=pk)
+
     p.days = days
     p.save(update_fields=["days"])
     messages.success(request, f"Days updated for {p.person}: {days}")
     return redirect("training_detail", pk=pk)
+
+
+def training_total_days(training) -> Decimal:
+    """
+    Returns inclusive day count as Decimal, e.g. 3-day training => Decimal('3').
+    Works if start_at/end_at are date or datetime.
+    """
+    start = training.start_at
+    end = training.end_at
+
+    if hasattr(start, "date"):
+        start = start.date()
+    if hasattr(end, "date"):
+        end = end.date()
+
+    if not isinstance(start, date) or not isinstance(end, date) or end < start:
+        # fallback
+        return Decimal("0")
+
+    days = (end - start).days + 1  # inclusive
+    return Decimal(str(days))
 
 @login_required
 @staff_required
@@ -925,6 +963,8 @@ def remove_participation(request, pk, participation_id):
 @require_POST
 def add_trainers_bulk(request, pk):
     training = get_object_or_404(Training, pk=pk)
+    total_days = training_total_days(training)
+
 
     start = training.start_at
     end = training.end_at
@@ -976,8 +1016,11 @@ def add_trainers_bulk(request, pk):
             p.removed_at = None
             p.removed_by = None
             p.removed_reason = ""
-            p.save(update_fields=["removed_at", "removed_by", "removed_reason"])
+            if p.days is None and total_days > 0:
+                p.days = total_days
+            p.save(update_fields=["removed_at", "removed_by", "removed_reason", "days"])
             reactivated += 1
+            
             continue
 
         # ✅ If already participating in THIS training in any role (trainee/trainer), skip cleanly.
@@ -992,7 +1035,8 @@ def add_trainers_bulk(request, pk):
             continue
 
         try:
-            Participation.objects.create(training=training, person=person, role="TRAINER")
+            Participation.objects.create(training=training, person=person, role="TRAINER", days=(total_days if total_days > 0 else None))
+
             added += 1
 
         except ValidationError as e:
@@ -1578,9 +1622,31 @@ def participation_set_status(request, participation_id):
         p.status = new_status
         p.status_changed_at = timezone.now()
         p.status_changed_by = request.user
-        p.save(update_fields=["status", "status_changed_at", "status_changed_by"])
 
-        # ✅ STEP 5B: log a status-change "email" (stub) ONLY if they previously got ASSIGNED
+        update_fields = ["status", "status_changed_at", "status_changed_by"]
+
+        # ✅ If trainer is AUTHORISED, ensure days is set (default) and not above total days
+        if p.role == "TRAINER" and new_status == "AUTHORISED":
+            total_days = training_total_days(p.training)
+
+            if total_days > 0:
+                if p.days is None:
+                    p.days = total_days
+                    update_fields.append("days")
+                else:
+                    # clamp if somehow above max
+                    try:
+                        if Decimal(p.days) > total_days:
+                            p.days = total_days
+                            update_fields.append("days")
+                    except Exception:
+                        # if p.days is weird, reset
+                        p.days = total_days
+                        update_fields.append("days")
+
+        p.save(update_fields=update_fields)
+
+        # log status-change "email" (stub) ONLY if they previously got ASSIGNED
         log_status_change_email_if_needed(
             training=p.training,
             person=p.person,
@@ -1631,8 +1697,6 @@ def _ensure_uof_defaults_exist():
                     "very_good": 0,
                 },
             )
-
-
 
 
 def seconds_to_mmss(seconds: int) -> str:
@@ -2222,8 +2286,6 @@ def training_email_log_assigned(request, pk):
     return redirect("training_detail", pk=pk)
 
 
-
-
 @login_required
 @staff_required
 def training_email_compose(request, pk):
@@ -2312,6 +2374,14 @@ def training_email_compose(request, pk):
             person=person,
             template_type=template_type,
         ).exists()
+    
+    def has_assigned_log(person):
+        return TrainingEmailLog.objects.filter(
+            training=training,
+            person=person,
+            template_type="ASSIGNED",
+        ).exists()
+
 
     def should_log_admin(rec):
         # True = should create a NEW admin log (no duplicate of same template_type + email)
@@ -2395,9 +2465,17 @@ def training_email_compose(request, pk):
             email_ok = bool((person.email or "").strip())
             up_to_date = email_ok and (not should_log_person(person))  # already logged
 
+            # NEW RULE: status change only if assigned was logged before
+            needs_assigned_first = (template_type == "STATUS_CHANGE")
+            has_assigned = has_assigned_log(person) if needs_assigned_first else True
+
             if not email_ok:
                 action = "skip"
                 reason = "No email address"
+                will_skip += 1
+            elif needs_assigned_first and not has_assigned:
+                action = "skip"
+                reason = "No ASSIGNED email logged yet"
                 will_skip += 1
             elif up_to_date:
                 action = "skip"
@@ -2414,6 +2492,7 @@ def training_email_compose(request, pk):
                 "action": action,
                 "reason": reason,
             })
+
 
     # ---- Preview (GET only): render for first recipient ----
     preview_person = None
@@ -2455,6 +2534,13 @@ def training_email_compose(request, pk):
 
     # ---- POST: create logs (no real sending) ----
     if request.method == "POST":
+
+        # Admin group requires a selected group
+        if recipient_mode == "admin_group" and not group_id:
+            messages.error(request, "Please select an admin group before sending/logging.")
+            return redirect("training_email_compose", pk=pk)
+
+
         # Only block on PENDING for participant emails
         if recipient_mode != "admin_group" and pending_count > 0:
             messages.error(
@@ -2480,14 +2566,13 @@ def training_email_compose(request, pk):
                 if not should_log_admin(rec):
                     skipped += 1
                     continue
-                stats_block, trainees_block, trainers_block = build_admin_blocks()
+                trainees_block, trainers_block = build_admin_blocks()
                 ctx = {
                     "training": training,
                     "person": None,
                     "status": "",
                     "recipient_name": rec.name,
                     "recipient_email": rec.email,
-                    "stats_block": stats_block,
                     "trainees_block": trainees_block,
                     "trainers_block": trainers_block,
                 }
@@ -2509,10 +2594,17 @@ def training_email_compose(request, pk):
                 created += 1
 
         else:
+            skipped_no_assigned = 0
             for person in people_list:
                 if not (person.email or "").strip():
                     skipped_no_email += 1
                     continue
+
+                # NEW RULE: status change only if assigned was logged before
+                if template_type == "STATUS_CHANGE" and not has_assigned_log(person):
+                    skipped_no_assigned += 1
+                    continue
+
                 if not should_log_person(person):
                     skipped += 1
                     continue
@@ -2547,6 +2639,8 @@ def training_email_compose(request, pk):
             messages.warning(request, f"Skipped {skipped} recipient(s) (already up to date).")
         if skipped_no_email:
             messages.warning(request, f"Skipped {skipped_no_email} recipient(s) (no email address).")
+        if skipped_no_assigned:
+            messages.warning(request, f"Skipped {skipped_no_assigned} recipient(s) (no ASSIGNED email logged yet).")
 
         # Redirect to logs so you can immediately see what was created
         return redirect("training_email_logs", pk=pk)
@@ -2676,7 +2770,6 @@ def training_email_logs(request, pk):
             "q": q,
         },
     )
-
 
 
 @login_required
