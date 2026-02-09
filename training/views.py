@@ -2238,7 +2238,7 @@ def training_email_compose(request, pk):
     pending_count = active_parts.filter(status="PENDING").count()
 
     # ---- UI selections (mode, group, template type, template) ----
-    recipient_mode = (request.GET.get("mode") or request.POST.get("mode") or "participants").strip().lower()
+    recipient_mode = (request.GET.get("mode") or request.POST.get("mode") or "admin_group").strip().lower()
     if recipient_mode not in ("participants", "trainees", "trainers", "admin_group"):
         recipient_mode = "participants"
 

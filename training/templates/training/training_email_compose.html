@@ -19,15 +19,6 @@
   <form method="get" style="margin-top:14px;">
     <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
 
-      <div class="form-row" style="min-width:200px;">
-        <label>Message type</label>
-        <select id="templateType" name="template_type" onchange="this.form.submit()">
-          <option value="ASSIGNED" {% if template_type == "ASSIGNED" %}selected{% endif %}>Assigned</option>
-          <option value="STATUS_CHANGE" {% if template_type == "STATUS_CHANGE" %}selected{% endif %}>Status changed</option>
-          <option value="ADMIN_SUMMARY" {% if template_type == "ADMIN_SUMMARY" %}selected{% endif %}>Admin summary</option>
-        </select>
-      </div>
-
       <div class="form-row">
         <label>Recipients</label>
         <select id="recipientMode" name="mode" onchange="this.form.submit()">
@@ -37,6 +28,21 @@
           <option value="trainers" {% if recipient_mode == "trainers" %}selected{% endif %}>Trainers only</option>
         </select>
       </div>
+
+      {% if recipient_mode != "admin_group" %}
+        <div class="form-row" style="min-width:200px;">
+          <label>Message type</label>
+          <select id="templateType" name="template_type" onchange="this.form.submit()">
+            <option value="ASSIGNED" {% if template_type == "ASSIGNED" %}selected{% endif %}>Assigned</option>
+            <option value="STATUS_CHANGE" {% if template_type == "STATUS_CHANGE" %}selected{% endif %}>Status changed</option>
+            <!-- hide ADMIN_SUMMARY in participant modes -->
+          </select>
+        </div>
+      {% else %}
+        <!-- When admin_group, force type but keep it submitted -->
+        <input type="hidden" name="template_type" value="ADMIN_SUMMARY">
+      {% endif %}
+
 
       {% if recipient_mode == "admin_group" %}
         <div class="form-row" style="min-width:260px;">
@@ -132,20 +138,30 @@
       <button class="btn primary" type="submit" id="sendBtn">Send (log only)</button>
     </div>
 
-    <script>
-      (function () {
-        const btn = document.getElementById("sendBtn");
-        if (!btn) return;
-        const form = btn.closest("form");
-        if (!form) return;
+   
 
-        form.addEventListener("submit", function () {
-          btn.disabled = true;
-          btn.classList.add("disabled");
-          btn.textContent = "Sending…";
-        });
-      })();
-    </script>
+<script>
+    (function () {
+      const mode = document.getElementById("recipientMode");
+      const groupSelect = document.querySelector('select[name="group_id"]');
+
+      if (!mode) return;
+
+      function maybeFocusGroup() {
+        if (mode.value === "admin_group" && groupSelect) {
+          groupSelect.focus();
+        }
+      }
+
+      // Run on page load
+      maybeFocusGroup();
+
+      // Run when recipient mode changes
+      mode.addEventListener("change", maybeFocusGroup);
+    })();
+</script>
+
+
   </form>
 </div>
 
