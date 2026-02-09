@@ -57,6 +57,7 @@ from training.utils import log_status_change_email_if_needed
 from .models import EmailTemplate
 from .email_render import render_email_text
 from django.views.decorators.http import require_http_methods
+from django.core.mail import EmailMessage
 
 
 
@@ -1341,6 +1342,16 @@ def my_history(request):
 def custom_403(request, exception=None):
     return render(request, "403.html", status=403)
 
+def send_log_email(to_email: str, subject: str, body: str) -> None:
+    msg = EmailMessage(
+        subject=subject,
+        body=body,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+        to=[to_email],
+    )
+    msg.send(fail_silently=False)
+
+
 def _send_verification_code(email: str) -> str:
     code = f"{random.randint(0, 999999):06d}"
     try:
@@ -2580,18 +2591,32 @@ def training_email_compose(request, pk):
                 rendered_subject = render_email_text(subject, ctx)
                 rendered_body = render_email_text(body, ctx)
 
-                TrainingEmailLog.objects.create(
-                    training=training,
-                    person=None,
-                    external_recipient_name=rec.name,
-                    external_recipient_email=rec.email,
-                    template_type="ADMIN_SUMMARY",  # enforce correct type for admin_group
-                    subject=rendered_subject,
-                    body=rendered_body,
-                    status_at_send="",
-                    sent_by=request.user,
-                )
-                created += 1
+                log = TrainingEmailLog.objects.create(
+                training=training,
+                person=None,
+                external_recipient_name=rec.name,
+                external_recipient_email=rec.email,
+                template_type="ADMIN_SUMMARY",
+                subject=rendered_subject,
+                body=rendered_body,
+                status_at_send="",
+                sent_by=request.user,
+                delivery_status="LOGGED",
+                error_message="",
+                sent_to=rec.email,
+            )
+
+            try:
+                send_log_email(rec.email, rendered_subject, rendered_body)
+                log.delivery_status = "SENT"
+                log.error_message = ""
+            except Exception as e:
+                log.delivery_status = "FAILED"
+                log.error_message = str(e)
+
+            log.save(update_fields=["delivery_status", "error_message"])
+            created += 1
+
 
         else:
             skipped_no_assigned = 0
@@ -2620,18 +2645,32 @@ def training_email_compose(request, pk):
                 rendered_subject = render_email_text(subject, ctx)
                 rendered_body = render_email_text(body, ctx)
 
-                TrainingEmailLog.objects.create(
-                    training=training,
-                    person=person,
-                    external_recipient_name="",
-                    external_recipient_email="",
-                    template_type=template_type,
-                    subject=rendered_subject,
-                    body=rendered_body,
-                    status_at_send=status_map.get(person.id, ""),
-                    sent_by=request.user,
-                )
-                created += 1
+                log = TrainingEmailLog.objects.create(
+                training=training,
+                person=person,
+                external_recipient_name="",
+                external_recipient_email="",
+                template_type=template_type,
+                subject=rendered_subject,
+                body=rendered_body,
+                status_at_send=status_map.get(person.id, ""),
+                sent_by=request.user,
+                delivery_status="LOGGED",
+                error_message="",
+                sent_to=person.email,
+            )
+
+            try:
+                send_log_email(person.email, rendered_subject, rendered_body)
+                log.delivery_status = "SENT"
+                log.error_message = ""
+            except Exception as e:
+                log.delivery_status = "FAILED"
+                log.error_message = str(e)
+
+            log.save(update_fields=["delivery_status", "error_message"])
+            created += 1
+
 
         if created:
             messages.success(request, f"Logged emails for {created} recipient(s).")

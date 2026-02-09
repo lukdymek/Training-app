@@ -327,6 +327,17 @@ class TrainingEmailLog(models.Model):
         ("ADMIN_SUMMARY", "Admin summary"),
     )
 
+
+    DELIVERY_CHOICES = [
+        ("LOGGED", "Logged"),
+        ("SENT", "Sent"),
+        ("FAILED", "Failed"),
+    ]
+
+    delivery_status = models.CharField(max_length=10, choices=DELIVERY_CHOICES, default="LOGGED")
+    error_message = models.TextField(blank=True, default="")
+    sent_to = models.EmailField(blank=True, default="")  # optional but very useful
+    
     training = models.ForeignKey(
         "Training",
         on_delete=models.CASCADE,
