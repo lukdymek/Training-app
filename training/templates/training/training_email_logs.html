@@ -1,0 +1,151 @@
+{% extends "training/base.html" %}
+{% block title %}Email logs{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h1 style="margin:0 0 6px;">Email logs</h1>
+  <p class="help" style="margin:0;">
+    Training: <strong>{{ training.course_name }}</strong>
+  </p>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:12px; flex-wrap:wrap;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a class="btn primary" href="{% url 'training_email_compose' training.id %}">Compose email</a>
+      <a class="btn secondary" href="{% url 'training_detail' training.id %}">Back to training</a>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <form method="get" style="margin-top:14px;">
+    <input type="hidden" name="page" value="1">
+    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+
+      <div class="form-row" style="min-width:220px;">
+        <label>Type</label>
+        <select name="type" onchange="this.form.submit()">
+          <option value="">All</option>
+          <option value="ASSIGNED" {% if type_filter == "ASSIGNED" %}selected{% endif %}>Assigned</option>
+          <option value="STATUS_CHANGE" {% if type_filter == "STATUS_CHANGE" %}selected{% endif %}>Status change</option>
+          <option value="ADMIN_SUMMARY" {% if type_filter == "ADMIN_SUMMARY" %}selected{% endif %}>Admin summary</option>
+        </select>
+      </div>
+
+      
+
+    </div>
+  </form>
+</div>
+
+<div style="height:14px;"></div>
+
+<!-- LOGS TABLE -->
+<div class="card">
+  <h2 style="margin:0 0 10px;">Logs</h2>
+
+  <div style="overflow:auto; border:1px solid var(--border); border-radius: 12px;">
+    <table class="pretty" style="min-width: 1050px;">
+      <thead>
+        <tr>
+          <th style="width:160px;">When</th>
+          <th style="width:160px;">Type</th>
+          <th>Recipient</th>
+          <th>Subject</th>
+          <th style="width:120px;">Status</th>
+          <th style="width:170px;">Actions</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>
+              <div><strong>{{ r.sent_at|date:"Y-m-d" }}</strong></div>
+              <div class="help">{{ r.sent_at|date:"H:i" }}</div>
+            </td>
+
+            <td>
+              <span class="pill">{{ r.template_type }}</span>
+            </td>
+
+            <td>
+              {% if r.person %}
+                <div><strong>{{ r.person.last_name }} {{ r.person.first_name }}</strong></div>
+                <div class="help">SYSPER ID: {{ r.person.sysper_id|default:"—" }}</div>
+                <div class="help">{{ r.person.email|default:"—" }}</div>
+              {% else %}
+                <div><strong>{{ r.external_recipient_name|default:"—" }}</strong></div>
+                <div class="help">{{ r.external_recipient_email|default:"—" }}</div>
+              {% endif %}
+            </td>
+
+            <td>
+              <div><strong>{{ r.subject|default:"(no subject)" }}</strong></div>
+              {% if r.body %}
+                <div class="help">
+                  {{ r.body|truncatechars:90 }}
+                </div>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if r.delivery_status %}
+                <span class="pill">{{ r.delivery_status }}</span>
+              {% else %}
+                <span class="help">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <a class="btn secondary" href="{% url 'training_email_log_detail' training.id r.id %}">View</a>
+
+                {% if r.person %}
+                  <form method="post" action="{% url 'training_email_resend_one' training.id r.person.id %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button class="btn primary" type="submit">Resend</button>
+                  </form>
+                {% else %}
+                  <button class="btn secondary" type="button" disabled title="Resend is only available for participant emails">
+                    Resend
+                  </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="help" style="color:var(--muted);">
+              No logs found.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <div style="display:flex; justify-content:flex-end; align-items:center; margin-top:12px; gap:10px; flex-wrap:wrap;">
+      {% if page_obj.has_previous %}
+        <a class="btn secondary"
+           href="?page={{ page_obj.previous_page_number }}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}">
+          Prev
+        </a>
+      {% endif %}
+
+      <div class="help" style="margin:0;">
+        Page <strong>{{ page_obj.number }}</strong> / {{ page_obj.paginator.num_pages }}
+      </div>
+
+      {% if page_obj.has_next %}
+        <a class="btn secondary"
+           href="?page={{ page_obj.next_page_number }}{% if type_filter %}&type={{ type_filter }}{% endif %}{% if q %}&q={{ q }}{% endif %}">
+          Next
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,249 @@
+{% extends "training/base.html" %}
+{% block title %}Compose email{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h1 style="margin:0 0 6px;">Compose email</h1>
+  <p class="help" style="margin:0;">
+    Training: <strong>{{ training.course_name }}</strong>
+  </p>
+
+  {% if pending_count > 0 and recipient_mode != "admin_group" %}
+    <div class="flash error" style="margin-top:12px;">
+      {{ pending_count }} participant(s) are still PENDING. Emails cannot be sent until resolved.
+    </div>
+  {% endif %}
+
+  <!-- ===== FILTER / SELECT (GET FORM) ===== -->
+  <form method="get" style="margin-top:14px;">
+    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+
+      <div class="form-row" style="min-width:200px;">
+        <label>Message type</label>
+        <select id="templateType" name="template_type" onchange="this.form.submit()">
+          <option value="ASSIGNED" {% if template_type == "ASSIGNED" %}selected{% endif %}>Assigned</option>
+          <option value="STATUS_CHANGE" {% if template_type == "STATUS_CHANGE" %}selected{% endif %}>Status changed</option>
+          <option value="ADMIN_SUMMARY" {% if template_type == "ADMIN_SUMMARY" %}selected{% endif %}>Admin summary</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label>Recipients</label>
+        <select id="recipientMode" name="mode" onchange="this.form.submit()">
+          <option value="admin_group" {% if recipient_mode == "admin_group" %}selected{% endif %}>Admin group</option>
+          <option value="participants" {% if recipient_mode == "participants" %}selected{% endif %}>All participants</option>
+          <option value="trainees" {% if recipient_mode == "trainees" %}selected{% endif %}>Trainees only</option>
+          <option value="trainers" {% if recipient_mode == "trainers" %}selected{% endif %}>Trainers only</option>
+        </select>
+      </div>
+
+      {% if recipient_mode == "admin_group" %}
+        <div class="form-row" style="min-width:260px;">
+          <label>Group</label>
+          <select name="group_id" onchange="this.form.submit()">
+            <option value="">— select group —</option>
+            {% for g in groups %}
+              <option value="{{ g.id }}" {% if group_id == g.id|stringformat:"s" %}selected{% endif %}>
+                {{ g.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
+
+      <div class="form-row" style="min-width:260px;">
+        <label>Template</label>
+        <select name="template_id" onchange="this.form.submit()">
+          {% for t in templates %}
+            <option value="{{ t.id }}" {% if template_id == t.id|stringformat:"s" %}selected{% endif %}>
+              {{ t.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <a class="btn secondary" href="{% url 'training_detail' training.id %}">Back</a>
+    </div>
+  </form>
+</div>
+
+<div style="height:14px;"></div>
+
+<!-- ===== MESSAGE EDIT + SEND FORM ===== -->
+<div class="card">
+  <h2 style="margin:0 0 10px;">Message</h2>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <!-- Persist selections -->
+    <input type="hidden" name="mode" value="{{ recipient_mode }}">
+    <input type="hidden" name="template_id" value="{{ template_id }}">
+    <input type="hidden" name="template_type" value="{{ template_type }}">
+    <input type="hidden" name="group_id" value="{{ group_id }}">
+
+    <div class="form-row">
+      <label>Subject</label>
+      <input name="subject" value="{{ subject }}">
+    </div>
+
+    <div class="form-row">
+      <label>Body</label>
+      <textarea name="body" rows="10">{{ body }}</textarea>
+
+      <div class="help" style="margin-top:6px;">
+        Common:
+        <code>{% verbatim %}{{ training.course_name }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ training.start_at }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ training.end_at }}{% endverbatim %}</code>
+        <br>
+        Participant:
+        <code>{% verbatim %}{{ person.first_name }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ person.last_name }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ status }}{% endverbatim %}</code>
+        <br>
+        Admin:
+        <code>{% verbatim %}{{ recipient_name }}{% endverbatim %}</code>
+        <code>{% verbatim %}{{ stats_block }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ trainees_block }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ trainers_block }}{% endverbatim %}</code>
+      </div>
+    </div>
+
+    {% if preview_subject or preview_body %}
+      <div class="card" style="margin-top:12px; background:#f8fafc;">
+        <h3 style="margin-top:0;">Preview</h3>
+
+        <div class="help"><strong>Subject:</strong></div>
+        <div style="margin-bottom:6px;">{{ preview_subject }}</div>
+
+        <div class="help"><strong>Body:</strong></div>
+        <div style="white-space:pre-wrap;">{{ preview_body }}</div>
+      </div>
+    {% endif %}
+
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:12px; flex-wrap:wrap;">
+      <div class="help" style="margin:0;">
+        Will log/send: <strong>{{ will_send|default:0 }}</strong> ·
+        Will skip: <strong>{{ will_skip|default:0 }}</strong>
+      </div>
+
+      <button class="btn primary" type="submit" id="sendBtn">Send (log only)</button>
+    </div>
+
+    <script>
+      (function () {
+        const btn = document.getElementById("sendBtn");
+        if (!btn) return;
+        const form = btn.closest("form");
+        if (!form) return;
+
+        form.addEventListener("submit", function () {
+          btn.disabled = true;
+          btn.classList.add("disabled");
+          btn.textContent = "Sending…";
+        });
+      })();
+    </script>
+  </form>
+</div>
+
+<div style="height:14px;"></div>
+
+<!-- ===== RECIPIENT ACTION TABLE ===== -->
+<div class="card">
+  <h2 style="margin:0 0 10px;">Recipients preview</h2>
+
+  <div style="overflow:auto; border:1px solid var(--border); border-radius: 12px;">
+    <table class="pretty" style="min-width: 900px;">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>SYSPER</th>
+          <th>Action</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for r in recipient_rows %}
+          <tr>
+            <td>
+              {% if r.person %}
+                <strong>{{ r.person.last_name }} {{ r.person.first_name }}</strong>
+              {% else %}
+                <strong>{{ r.recipient.name }}</strong>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if r.person %}
+                {% if r.person.email %}
+                  {{ r.person.email }}
+                {% else %}
+                  <span style="color:var(--muted);">— no email —</span>
+                {% endif %}
+              {% else %}
+                {% if r.recipient.email %}
+                  {{ r.recipient.email }}
+                {% else %}
+                  <span style="color:var(--muted);">— no email —</span>
+                {% endif %}
+              {% endif %}
+            </td>
+
+            <td>
+              {% if r.person %}
+                {{ r.person.sysper_id }}
+              {% else %}
+                <span style="color:var(--muted);">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if r.action == "send" %}
+                <span class="pill" style="border-color: rgba(46,204,113,.35);">Will send</span>
+              {% else %}
+                <span class="pill" style="border-color: rgba(231,76,60,.35);">Skip</span>
+              {% endif %}
+            </td>
+
+            <td class="help" style="margin:0;">{{ r.reason }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" style="color:var(--muted);">No recipients for this selection.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== AUTO SWITCH JS ===== -->
+<script>
+(function () {
+  const mode = document.getElementById("recipientMode");
+  const type = document.getElementById("templateType");
+  if (!mode || !type) return;
+
+  function autoSwitch() {
+    // if admin group, force ADMIN_SUMMARY
+    if (mode.value === "admin_group") {
+      if (type.value !== "ADMIN_SUMMARY") {
+        type.value = "ADMIN_SUMMARY";
+      }
+    } else {
+      // if not admin group, don't allow ADMIN_SUMMARY lingering
+      if (type.value === "ADMIN_SUMMARY") {
+        type.value = "ASSIGNED";
+      }
+    }
+  }
+
+  autoSwitch();
+  mode.addEventListener("change", autoSwitch);
+})();
+</script>
+
+{% endblock %}

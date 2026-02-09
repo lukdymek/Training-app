@@ -138,6 +138,8 @@
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
       <div>
         <h1 style="margin:0 0 6px;">{{ training.course_name }}</h1>
+
+        
         <p class="help" style="margin:0;">
           <strong>When:</strong> {{ training.start_at }} → {{ training.end_at }}
           <strong style="margin-left:10px;">(Total: {{ duration_days }} day{{ duration_days|pluralize }})</strong><br>
@@ -151,6 +153,8 @@
         <a class="btn secondary" href="{% url 'training_list' %}">Back to trainings</a>
         <a class="btn secondary" href="{% url 'training_edit' training.pk %}">Edit</a>
         <a class="btn danger" href="{% url 'training_delete' training.pk %}">Delete</a>
+        
+
       </div>
     </div>
 
@@ -415,6 +419,85 @@
       </div>
     </div>
     {% endif %}
+
+   <div class="card" style="grid-column: 1 / -1;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h2 style="margin:0 0 6px;">Emails</h2>
+      <div class="help" style="margin:0;">
+        Participants: {{ participants_count|default:0 }} ·
+        Authorised: {{ authorised_count|default:0 }} ·
+        Pending: {{ pending_count|default:0 }} ·
+        “Assigned” logged: {{ assigned_logged_count|default:0 }}
+      </div>
+
+      {% if pending_count|default:0 > 0 %}
+        <div class="flash error" style="margin-top:10px;">
+          {{ pending_count }} participant(s) are still PENDING — emails cannot be sent until resolved.
+        </div>
+      {% else %}
+        <div class="flash success" style="margin-top:10px;">
+          No PENDING participants — emails can be sent.
+        </div>
+      {% endif %}
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <!-- ✅ renamed button -->
+      <a class="btn primary" href="{% url 'training_email_compose' training.id %}">
+        Send email
+      </a>
+
+      <!-- ✅ moved from top card -->
+      <a class="btn secondary" href="{% url 'training_email_logs' training.id %}">
+        Email log
+      </a>
+    </div>
+  </div>
+
+  <div style="height:12px;"></div>
+
+  <!-- Optional: keep a small “latest logs” table inside the same card -->
+  <div style="overflow:auto; border:1px solid var(--border); border-radius: 12px;">
+    <table class="pretty" style="min-width: 980px;">
+      <thead>
+        <tr>
+          <th>Person</th>
+          <th>Template</th>
+          <th>Sent at</th>
+          <th>Status at send</th>
+          <th>Sent by</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in latest_email_logs %}
+          <tr>
+            <td>
+              <strong>{{ r.person.last_name }} {{ r.person.first_name }}</strong><br>
+              <span class="help">SYSPER ID: {{ r.person.sysper_id }}</span>
+            </td>
+            <td><span class="pill">{{ r.template_type }}</span></td>
+            <td>{{ r.sent_at|default:"—" }}</td>
+            <td><span class="pill">{{ r.status_at_send|default:"—" }}</span></td>
+            <td>
+              {% if r.sent_by %}
+                {{ r.sent_by.get_full_name|default:r.sent_by.username }}
+              {% else %}
+                <span style="color:var(--muted);">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" style="color:var(--muted);">No email logs yet for this training.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
   </div>
 
   <script>

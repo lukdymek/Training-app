@@ -53,11 +53,13 @@ urlpatterns = [
     path("trainings/<int:pk>/uof/results/", views.uof_results, name="uof_results"), 
     path("trainings/<int:training_id>/uof/export/<int:participation_id>/docx/", views.uof_export_docx_one, name="uof_export_docx_one"),
     path("trainings/<int:training_id>/uof/export/all.zip", views.uof_export_docx_all_zip, name="uof_export_docx_all_zip"),
-    
-
-
-
-
+    path("trainings/<int:pk>/emails/log-assigned/", views.training_email_log_assigned, name="training_email_log_assigned"),
+    path("trainings/<int:pk>/emails/compose/", views.training_email_compose, name="training_email_compose",),
+    path("trainings/<int:pk>/emails/logs/", views.training_email_logs, name="training_email_logs",),
+    path("trainings/<int:pk>/emails/logs/<int:log_id>/", views.training_email_log_detail, name="training_email_log_detail",),
+    path("trainings/<int:pk>/emails/logs/export.csv", views.training_email_logs_export_csv, name="training_email_logs_export_csv",),
+    path("trainings/<int:pk>/emails/resend/<int:person_id>/", views.training_email_resend_one, name="training_email_resend_one"),
+    path("trainings/<int:pk>/emails/admin/compose/", views.training_email_admin_compose, name="training_email_admin_compose",),
 
 ]
 

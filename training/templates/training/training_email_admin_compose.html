@@ -1,0 +1,148 @@
+{% extends "training/base.html" %}
+{% block title %}Send admin email{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1 style="margin:0 0 6px;">Send admin email</h1>
+      <p class="help" style="margin:0;">
+        Training: <strong>{{ training.course_name }}</strong>
+      </p>
+
+      {% if pending_count > 0 %}
+        <div class="flash error" style="margin-top:12px;">
+          {{ pending_count }} participant(s) are still PENDING. Admin email cannot be sent until resolved.
+        </div>
+      {% else %}
+        <div class="flash success" style="margin-top:12px;">
+          No PENDING participants — admin email can be sent.
+        </div>
+      {% endif %}
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <a class="btn secondary" href="{% url 'training_detail' training.id %}">Back</a>
+    </div>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h2 style="margin:0 0 10px;">Recipients</h2>
+
+  <form method="get" style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+    <div class="form-row" style="min-width:180px;">
+      <label>Mode</label>
+      <select name="rec_mode" onchange="this.form.submit()">
+        <option value="group" {% if recipient_mode == "group" %}selected{% endif %}>Group</option>
+        <option value="single" {% if recipient_mode == "single" %}selected{% endif %}>Single recipient</option>
+      </select>
+    </div>
+
+    {% if recipient_mode == "single" %}
+      <div class="form-row" style="min-width:320px;">
+        <label>Recipient</label>
+        <select name="recipient_id" onchange="this.form.submit()">
+          <option value="">— select —</option>
+          {% for r in singles %}
+            <option value="{{ r.id }}" {% if recipient_id == r.id|stringformat:"s" %}selected{% endif %}>
+              {{ r.name }} ({{ r.email }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    {% else %}
+      <div class="form-row" style="min-width:320px;">
+        <label>Group</label>
+        <select name="group_id" onchange="this.form.submit()">
+          <option value="">— select —</option>
+          {% for g in groups %}
+            <option value="{{ g.id }}" {% if group_id == g.id|stringformat:"s" %}selected{% endif %}>
+              {{ g.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+
+    <div class="form-row" style="min-width:280px;">
+      <label>Template</label>
+      <select name="template_id" onchange="this.form.submit()">
+        {% for t in templates %}
+          <option value="{{ t.id }}" {% if template_id == t.id %}selected{% endif %}>
+            {{ t.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+
+  <div style="height:10px;"></div>
+
+  <div class="help" style="margin:0;">
+    Selected recipients: <strong>{{ recipient_list|length }}</strong>
+  </div>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h2 style="margin:0 0 10px;">Message</h2>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="rec_mode" value="{{ recipient_mode }}">
+    <input type="hidden" name="group_id" value="{{ group_id }}">
+    <input type="hidden" name="recipient_id" value="{{ recipient_id }}">
+    <input type="hidden" name="template_id" value="{{ template_id }}">
+
+    <div class="form-row">
+      <label>Subject</label>
+      <input name="subject" value="{{ subject }}" class="input">
+    </div>
+
+    <div class="form-row">
+      <label>Body</label>
+      <textarea name="body" rows="10" class="input">{{ body }}</textarea>
+
+      <div class="help" style="margin-top:6px;">
+        Placeholders:
+        <code>{% verbatim %}{{ training.course_name }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ training.start_at }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ training.end_at }}{% endverbatim %}</code>,
+        <code>{% verbatim %}{{ participants }}{% endverbatim %}</code>
+      </div>
+    </div>
+
+    <button class="btn primary" type="submit">
+      Send admin email (log only)
+    </button>
+  </form>
+</div>
+
+<div style="height:14px;"></div>
+
+<div class="card">
+  <h2 style="margin:0 0 10px;">Preview (first recipient)</h2>
+
+  {% if preview_to %}
+    <div class="help" style="margin:0 0 10px;">
+      To: <strong>{{ preview_to.name }}</strong> ({{ preview_to.email }})
+    </div>
+
+    <div style="border:1px solid var(--border); border-radius:12px; padding:12px; background:var(--card);">
+      <div style="font-weight:800; margin-bottom:6px;">Subject</div>
+      <div style="white-space:pre-wrap;">{{ preview_subject }}</div>
+
+      <div style="height:10px;"></div>
+
+      <div style="font-weight:800; margin-bottom:6px;">Body</div>
+      <div style="white-space:pre-wrap;">{{ preview_body }}</div>
+    </div>
+  {% else %}
+    <div style="color:var(--muted);">Select a group or single recipient to preview.</div>
+  {% endif %}
+</div>
+{% endblock %}

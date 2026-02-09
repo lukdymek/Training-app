@@ -316,3 +316,134 @@ class UofAssessment(models.Model):
 
     def __str__(self):
         return f"UOF Assessment for {self.participation_id}"
+    
+
+
+
+class TrainingEmailLog(models.Model):
+    TEMPLATE_TYPE_CHOICES = (
+        ("ASSIGNED", "Assigned"),
+        ("STATUS_CHANGE", "Status change"),
+        ("ADMIN_SUMMARY", "Admin summary"),
+    )
+
+    training = models.ForeignKey(
+        "Training",
+        on_delete=models.CASCADE,
+        related_name="email_logs",
+    )
+
+    # ✅ Person recipient (normal participant emails) — now optional
+    person = models.ForeignKey(
+        "Person",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="training_email_logs",
+    )
+
+    # ✅ External recipient (academy / admin groups) — when person is NULL
+    external_recipient_name = models.CharField(max_length=200, blank=True, default="")
+    external_recipient_email = models.EmailField(blank=True, default="")
+
+    # What kind of email was this?
+    template_type = models.CharField(
+        max_length=20,
+        choices=TEMPLATE_TYPE_CHOICES,
+        default="ASSIGNED",   # ✅ keep defaults consistent with your choices
+    )
+
+    # Snapshot at send time (so later it’s auditable)
+    subject = models.CharField(max_length=255, blank=True, default="")
+    body = models.TextField(blank=True, default="")
+
+    # Participation status at the moment the email was sent (optional but useful)
+    status_at_send = models.CharField(max_length=12, blank=True, default="")
+
+    # Who triggered it
+    sent_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sent_training_emails",
+    )
+
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            # ✅ fast lookup for participant logs (person can be NULL, that's OK)
+            models.Index(fields=["training", "person", "template_type"]),
+            models.Index(fields=["person", "sent_at"]),
+            # ✅ fast lookup for external recipients
+            models.Index(fields=["training", "external_recipient_email", "template_type"]),
+        ]
+        ordering = ["-sent_at"]
+
+    def recipient_display_name(self):
+        if self.person_id:
+            return f"{self.person.last_name} {self.person.first_name}"
+        return (self.external_recipient_name or "").strip() or (self.external_recipient_email or "").strip() or "—"
+
+    def recipient_display_email(self):
+        if self.person_id:
+            return (self.person.email or "").strip()
+        return (self.external_recipient_email or "").strip()
+
+    def __str__(self):
+        who = self.person_id or (self.external_recipient_email or "external")
+        return f"{self.training_id} / {who} / {self.template_type} @ {self.sent_at:%Y-%m-%d %H:%M}"
+
+
+from django.db import models
+
+class EmailTemplate(models.Model):
+    KIND_CHOICES = (
+        ("PARTICIPANT", "Participant"),
+        ("ADMIN", "Admin / Academy"),
+    )
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default="PARTICIPANT", db_index=True)
+
+
+    name = models.CharField(max_length=120, unique=True)
+    
+
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+from django.db import models
+
+class EmailRecipient(models.Model):
+    name = models.CharField(max_length=120)
+    email = models.EmailField()
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} <{self.email}>"
+
+
+class EmailRecipientGroup(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    recipients = models.ManyToManyField(EmailRecipient, blank=True, related_name="groups")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name

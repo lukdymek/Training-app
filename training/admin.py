@@ -13,6 +13,7 @@ from django.db import transaction
 from django.utils.dateparse import parse_date
 import os
 import tempfile
+from .models import EmailTemplate, EmailRecipient, EmailRecipientGroup
 
 
 
@@ -381,3 +382,25 @@ class PersonAdmin(admin.ModelAdmin):
                 "headers": headers,
             },
         )
+
+
+@admin.register(EmailTemplate)
+class EmailTemplateAdmin(admin.ModelAdmin):
+    list_display = ("name", "kind", "is_active", "updated_at")
+    list_filter = ("kind", "is_active")
+    search_fields = ("name", "subject", "body")
+
+
+@admin.register(EmailRecipient)
+class EmailRecipientAdmin(admin.ModelAdmin):
+    list_display = ("name", "email", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "email")
+    ordering = ("name",)
+
+@admin.register(EmailRecipientGroup)
+class EmailRecipientGroupAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name",)
+    filter_horizontal = ("recipients",)  # this MUST be the M2M field name

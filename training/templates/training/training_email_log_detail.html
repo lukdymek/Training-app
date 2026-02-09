@@ -1,0 +1,84 @@
+{% extends "training/base.html" %}
+
+{% block content %}
+
+<div class="wrap">
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h2 style="margin:0;">Email log detail</h2>
+      <div style="opacity:0.8; font-size:0.9rem;">
+        Training: <strong>{{ training.name }}</strong>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="btn secondary" href="{% url 'training_email_logs' training.id %}">Back to logs</a>
+      <a class="btn secondary" href="{% url 'training_email_compose' training.id %}">Compose</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="k">Sent at</div>
+      <div class="v">{{ log.sent_at|date:"Y-m-d H:i" }}</div>
+    </div>
+
+    <div class="row">
+      <div class="k">Type</div>
+      <div class="v"><span class="pill">{{ log.template_type }}</span></div>
+    </div>
+
+    <div class="row">
+      <div class="k">Recipient</div>
+      <div class="v">
+        {% if log.person %}
+          {{ log.person.last_name }} {{ log.person.first_name }}
+          <div class="k" style="margin-top:4px;">SYSPER ID: {{ log.person.sysper_id|default:"—" }}</div>
+          <div class="k">Email: {{ log.person.email|default:"—" }}</div>
+        {% else %}
+          {{ log.external_recipient_name|default:"—" }}
+          <div class="k" style="margin-top:4px;">Email: {{ log.external_recipient_email|default:"—" }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="k">Subject</div>
+      <div class="v">{{ log.subject|default:"(no subject)" }}</div>
+    </div>
+
+    <div class="row">
+      <div class="k">Delivery status</div>
+      <div class="v">
+        {% if log.delivery_status %}
+          <span class="pill">{{ log.delivery_status }}</span>
+        {% else %}
+          —
+        {% endif %}
+        {% if log.error_message %}
+          <div class="k" style="margin-top:6px;">Error</div>
+          <pre class="k">{{ log.error_message }}</pre>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="k">Body</div>
+      <div class="v" style="font-weight:400;">
+        <pre>{{ log.body|default:"" }}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    {% if log.person %}
+      <form method="post" action="{% url 'training_email_resend_one' training.id log.person.id %}">
+        {% csrf_token %}
+        <button class="btn" type="submit">Resend</button>
+      </form>
+    {% else %}
+      <button class="btn" type="button" disabled title="Resend is only available for participant emails">Resend</button>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
