@@ -100,16 +100,13 @@
               <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <a class="btn secondary" href="{% url 'training_email_log_detail' training.id r.id %}">View</a>
 
-                {% if r.person %}
+                {% if r.person and r.delivery_status == "FAILED" %}
                   <form method="post" action="{% url 'training_email_resend_one' training.id r.person.id %}" style="display:inline;">
                     {% csrf_token %}
-                    <button class="btn primary" type="submit">Resend</button>
+                    <button class="btn danger" type="submit">Resend</button>
                   </form>
-                {% else %}
-                  <button class="btn secondary" type="button" disabled title="Resend is only available for participant emails">
-                    Resend
-                  </button>
                 {% endif %}
+
               </div>
             </td>
           </tr>

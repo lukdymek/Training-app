@@ -141,6 +141,11 @@ def training_detail(request, pk):
     start = training.start_at
     end = training.end_at
 
+    can_delete = not Participation.objects.filter(
+        training=training,
+        removed_at__isnull=True,
+    ).exists()
+    
     # UOF flag
     subj_name = ((training.subject.name if training.subject else "") or "").strip().lower()
     is_uof = subj_name in ("use of force", "uof")
@@ -280,14 +285,24 @@ def add_trainee(request, pk):
         old.removed_at = None
         old.removed_by = None
         old.removed_reason = ""
+
+        # ✅ reset status on re-add
+        old.status = "PENDING"
+        old.status_changed_at = None
+        old.status_changed_by = None
+
         try:
-            old.save(update_fields=["removed_at", "removed_by", "removed_reason"])
-            messages.success(request, f"{person} re-added as trainee.")
+            old.save(update_fields=[
+                "removed_at", "removed_by", "removed_reason",
+                "status", "status_changed_at", "status_changed_by",
+            ])
+            messages.success(request, f"{person} re-added as trainee (status reset to PENDING).")
         except ValidationError as e:
-            # e.g. overlap constraint (shouldn’t happen for same training anymore, but safe)
             msg = (e.messages[0] if getattr(e, "messages", None) else "Validation error.")
             messages.error(request, msg)
+
         return redirect("training_detail", pk=pk)
+
 
     # ✅ Otherwise create new participation
     try:
@@ -352,11 +367,19 @@ def add_trainer(request, pk):
             old.removed_by = None
             old.removed_reason = ""
 
+            # ✅ reset status on re-add
+            old.status = "PENDING"
+            old.status_changed_at = None
+            old.status_changed_by = None
+
+            # optional: reset days too (I recommend yes)
+            old.days = None
+
             # ✅ set days if missing
             if old.days is None and total_days > 0:
                 old.days = total_days
 
-            old.save(update_fields=["removed_at", "removed_by", "removed_reason", "days"])
+            old.save(update_fields=["removed_at", "removed_by", "removed_reason", "status", "status_changed_at", "status_changed_by",])
             messages.success(request, f"{person} re-added as trainer.")
             return redirect("training_detail", pk=pk)
 
@@ -474,33 +497,65 @@ def training_create(request):
 def training_edit(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
+    has_active_participants = Participation.objects.filter(
+        training=training,
+        removed_at__isnull=True,
+    ).exists()
+
     if request.method == "POST":
         form = TrainingForm(request.POST, instance=training)
+
         if form.is_valid():
-            try:
-                with transaction.atomic():
-                    t = form.save()
+            if has_active_participants:
+                # ✅ Only allow capacity + remarks to change
+                allowed = {"capacity", "remarks"}
 
-                    # Keep Participation.timespan in sync with updated training dates
-                    new_range = Range(t.start_at, t.end_at, bounds='[)')
-                    Participation.objects.filter(training=t).update(timespan=new_range)
+                changed = set(form.changed_data)
+                forbidden = changed - allowed
 
-                messages.success(request, "Training updated.")
+                if forbidden:
+                    messages.error(
+                        request,
+                        "This training already has participants. You can only change Capacity and Remarks."
+                    )
+                    # revert forbidden fields to original values
+                    for field in forbidden:
+                        form.cleaned_data[field] = getattr(training, field)
+                    # Save only allowed fields if present
+                    save_fields = [f for f in changed if f in allowed]
+                    if save_fields:
+                        for f in save_fields:
+                            setattr(training, f, form.cleaned_data[f])
+                        training.save(update_fields=save_fields)
+                        messages.success(request, "Saved changes (Capacity/Remarks).")
+                    return redirect("training_detail", pk=pk)
+
+                # if they only changed allowed fields, save normally
+                form.save()
+                messages.success(request, "Saved changes.")
                 return redirect("training_detail", pk=pk)
 
-            except IntegrityError:
-                # In case something slipped through (race condition)
-                messages.error(request, "Change not allowed: it would create an overlap for an assigned person.")
-                return redirect("training_edit", pk=pk)
+            # ✅ no participants -> free editing
+            form.save()
+            messages.success(request, "Saved changes.")
+            return redirect("training_detail", pk=pk)
+
     else:
         form = TrainingForm(instance=training)
+
+        # ✅ UI: disable fields when participants exist
+        if has_active_participants:
+            for name in ["course_name", "subject", "start_at", "end_at", "location", "uof_iteration"]:
+                if name in form.fields:
+                    form.fields[name].disabled = True
 
     return render(request, "training/training_form.html", {
         "form": form,
         "training": training,
-        "page_title": "Edit training",
-        "submit_label": "Save changes",
         "is_edit": True,
+        "page_title": "Edit training",
+        "submit_label": "Save",
+        "has_active_participants": has_active_participants,
     })
 
 
@@ -509,14 +564,44 @@ def training_edit(request, pk):
 def training_delete(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
+    active_qs = Participation.objects.filter(
+        training=training,
+        removed_at__isnull=True,
+    )
+    active_count = active_qs.count()
+
+    # ✅ If user opened the delete page but it’s not allowed, show message and bounce back
+    if request.method == "GET" and active_count > 0:
+        messages.error(
+            request,
+            f"Cannot delete this training: there are still {active_count} active participant(s). "
+            "Remove all trainees/trainers first."
+        )
+        return redirect("training_detail", pk=pk)
+
     if request.method == "POST":
+        # ✅ Still protect server-side (important)
+        if active_count > 0:
+            messages.error(
+                request,
+                f"Cannot delete this training: there are still {active_count} active participant(s). "
+                "Remove all trainees/trainers first."
+            )
+            return redirect("training_detail", pk=pk)
+
         with transaction.atomic():
-            # This will delete participations too if FK is CASCADE on Participation.training
             training.delete()
+
         messages.success(request, "Training deleted.")
         return redirect("calendar")
 
-    return render(request, "training/training_confirm_delete.html", {"training": training})
+    return render(
+        request,
+        "training/training_confirm_delete.html",
+        {"training": training},
+    )
+
+
 
 
 @login_required
@@ -883,27 +968,31 @@ def _soft_remove_participations(qs, user, reason: str):
 def remove_trainee(request, pk, person_id):
     training = get_object_or_404(Training, pk=pk)
     reason = (request.POST.get("reason") or "").strip()
+    send_email = (request.POST.get("send_email") or "0") == "1"
 
     p = get_object_or_404(
-        Participation,
+        Participation.objects.select_related("person"),
         training=training,
         person_id=person_id,
         role="TRAINEE",
         removed_at__isnull=True,
     )
 
+    old_status = p.status
+    person = p.person
+
     p.removed_at = timezone.now()
     p.removed_by = request.user
     p.removed_reason = reason
     p.save(update_fields=["removed_at", "removed_by", "removed_reason"])
 
-    # Also remove from future instances in the same recurring series (only if they exist)
+    # Also remove from future instances in same recurring series
     series = getattr(training, "recurring_training", None)
     if series is not None:
         Participation.objects.filter(
             person_id=person_id,
             role="TRAINEE",
-            training__recurring_training=series,   # adjust if your field name differs
+            training__recurring_training=series,
             training__start_at__gt=training.start_at,
             removed_at__isnull=True,
         ).update(
@@ -913,6 +1002,41 @@ def remove_trainee(request, pk, person_id):
         )
 
     messages.success(request, "Trainee removed from training.")
+
+    # ✅ LOG optional email
+    if send_email and person.email:
+        ctx = {
+            "training": training,
+            "person": person,
+            "reason": reason,
+        }
+
+        subject = render_email_text(
+            "Removed from {{ training.course_name }}",
+            ctx,
+        )
+
+        body = render_email_text(
+            (
+                "Hello {{ person.first_name }},\n\n"
+                "You have been removed from the training "
+                "{{ training.course_name }}.\n\n"
+                "Reason: {{ reason }}\n\n"
+                "Regards,\nTraining Team"
+            ),
+            ctx,
+        )
+
+        TrainingEmailLog.objects.create(
+            training=training,
+            person=person,
+            template_type="REMOVED",
+            subject=subject,
+            body=body,
+            status_at_send=old_status,
+            sent_by=request.user,
+        )
+
     return redirect("training_detail", pk=pk)
 
 
@@ -922,6 +1046,7 @@ def remove_trainee(request, pk, person_id):
 def remove_trainer(request, pk, person_id):
     training = get_object_or_404(Training, pk=pk)
     reason = (request.POST.get("reason") or "").strip()
+    send_email = (request.POST.get("send_email") or "0") == "1"
 
     qs = Participation.objects.filter(
         training=training,
@@ -929,6 +1054,8 @@ def remove_trainer(request, pk, person_id):
         role="TRAINER",
         removed_at__isnull=True,
     )
+
+    p = qs.select_related("person").first()
 
     updated = qs.update(
         removed_at=timezone.now(),
@@ -938,8 +1065,43 @@ def remove_trainer(request, pk, person_id):
 
     if updated == 0:
         messages.warning(request, "No active trainer participation found to remove.")
-    else:
-        messages.success(request, "Trainer removed from training.")
+        return redirect("training_detail", pk=pk)
+
+    messages.success(request, "Trainer removed from training.")
+
+    # ✅ LOG REMOVAL EMAIL (optional)
+    if send_email and p and p.person.email:
+        ctx = {
+            "training": training,
+            "person": p.person,
+            "reason": reason,
+        }
+
+        subject = render_email_text(
+            "Removed from {{ training.course_name }}",
+            ctx,
+        )
+
+        body = render_email_text(
+            (
+                "Hello {{ person.first_name }},\n\n"
+                "You have been removed from the training "
+                "{{ training.course_name }} ({{ training.start_at }} → {{ training.end_at }}).\n\n"
+                "Reason: {{ reason }}\n\n"
+                "Regards,\nTraining Team"
+            ),
+            ctx,
+        )
+
+        TrainingEmailLog.objects.create(
+            training=training,
+            person=p.person,
+            template_type="REMOVED",
+            subject=subject,
+            body=body,
+            status_at_send=p.status,
+            sent_by=request.user,
+        )
 
     return redirect("training_detail", pk=pk)
 
@@ -950,14 +1112,59 @@ def remove_trainer(request, pk, person_id):
 @require_POST
 def remove_participation(request, pk, participation_id):
     training = get_object_or_404(Training, pk=pk)
+
     participation = get_object_or_404(
-        Participation,
+        Participation.objects.select_related("person"),
         pk=participation_id,
         training=training,
     )
+
+    reason = (request.POST.get("reason") or "").strip()
+    send_email = (request.POST.get("send_email") or "0") == "1"
+
+    person = participation.person
+    status = participation.status
+
     participation.delete()
+
     messages.success(request, "Removed from training.")
+
+    # ✅ LOG REMOVAL EMAIL
+    if send_email and person.email:
+        ctx = {
+            "training": training,
+            "person": person,
+            "reason": reason,
+        }
+
+        subject = render_email_text(
+            "Removed from {{ training.course_name }}",
+            ctx,
+        )
+
+        body = render_email_text(
+            (
+                "Hello {{ person.first_name }},\n\n"
+                "You have been removed from the training "
+                "{{ training.course_name }}.\n\n"
+                "Reason: {{ reason }}\n\n"
+                "Regards,\nTraining Team"
+            ),
+            ctx,
+        )
+
+        TrainingEmailLog.objects.create(
+            training=training,
+            person=person,
+            template_type="REMOVED",
+            subject=subject,
+            body=body,
+            status_at_send=status,
+            sent_by=request.user,
+        )
+
     return redirect("training_detail", pk=pk)
+
 
 @login_required
 @staff_required
@@ -1017,9 +1224,17 @@ def add_trainers_bulk(request, pk):
             p.removed_at = None
             p.removed_by = None
             p.removed_reason = ""
+            # ✅ reset status on re-add
+            p.status = "PENDING"
+            p.status_changed_at = None
+            p.status_changed_by = None
+
+            # optional: reset days too
+            p.days = None
             if p.days is None and total_days > 0:
                 p.days = total_days
-            p.save(update_fields=["removed_at", "removed_by", "removed_reason", "days"])
+            
+            p.save(update_fields=["removed_at", "removed_by", "removed_reason", "status", "status_changed_at", "status_changed_by",])
             reactivated += 1
             
             continue
@@ -1625,6 +1840,8 @@ def participation_set_status(request, participation_id):
 
     new_status = (request.POST.get("status") or "").strip().upper()
     allowed = {"AUTHORISED", "PENDING", "REJECTED", "WITHDRAWN"}
+    send_email = (request.POST.get("send_email") or "0") == "1"
+
     if new_status not in allowed:
         return JsonResponse({"ok": False, "error": "invalid_status"}, status=400)
 
@@ -1656,6 +1873,41 @@ def participation_set_status(request, participation_id):
                         update_fields.append("days")
 
         p.save(update_fields=update_fields)
+
+        # ✅ If WITHDRAWN and admin chose to email
+        if new_status == "WITHDRAWN" and send_email and p.person.email:
+            ctx = {
+                "training": p.training,
+                "person": p.person,
+                "reason": "",
+            }
+
+            subject = render_email_text(
+                "Withdrawn from {{ training.course_name }}",
+                ctx,
+            )
+
+            body = render_email_text(
+                (
+                    "Hello {{ person.first_name }},\n\n"
+                    "You have been withdrawn from the training "
+                    "{{ training.course_name }}.\n\n"
+                    "If you have questions, please contact the organiser.\n\n"
+                    "Regards,\nTraining Team"
+                ),
+                ctx,
+            )
+
+            TrainingEmailLog.objects.create(
+                training=p.training,
+                person=p.person,
+                template_type="WITHDRAWN",
+                subject=subject,
+                body=body,
+                status_at_send=p.status,
+                sent_by=request.user,
+            )
+
 
         # log status-change "email" (stub) ONLY if they previously got ASSIGNED
         log_status_change_email_if_needed(
@@ -2295,6 +2547,24 @@ def training_email_log_assigned(request, pk):
         messages.warning(request, f"Skipped {skipped} participant(s) (already logged).")
 
     return redirect("training_detail", pk=pk)
+
+@login_required
+@staff_required
+def training_email_summary(request, pk):
+    training = get_object_or_404(Training, pk=pk)
+
+    active = Participation.objects.filter(training=training, removed_at__isnull=True)
+
+    pending = active.filter(status="PENDING").count()
+    authorised = active.filter(status="AUTHORISED").count()
+    total = active.count()
+
+    return JsonResponse({
+        "ok": True,
+        "participants_count": total,
+        "authorised_count": authorised,
+        "pending_count": pending,
+    })
 
 
 @login_required

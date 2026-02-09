@@ -60,6 +60,8 @@ urlpatterns = [
     path("trainings/<int:pk>/emails/logs/export.csv", views.training_email_logs_export_csv, name="training_email_logs_export_csv",),
     path("trainings/<int:pk>/emails/resend/<int:person_id>/", views.training_email_resend_one, name="training_email_resend_one"),
     path("trainings/<int:pk>/emails/admin/compose/", views.training_email_admin_compose, name="training_email_admin_compose",),
+    path("trainings/<int:pk>/emails/summary/", views.training_email_summary, name="training_email_summary"),
+
 
 ]
 

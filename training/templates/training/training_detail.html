@@ -208,6 +208,8 @@
         <form id="add-trainee-form" method="post" action="{% url 'add_trainee' training.pk %}">
           {% csrf_token %}
           <input type="hidden" name="sysper_id" id="trainee-sysper-id">
+          <input type="hidden" name="send_email" value="0">
+
         </form>
 
         <input type="text" id="trainee-search" placeholder="Type 2+ chars (name or SYSPER ID)..." autocomplete="off">
@@ -263,6 +265,8 @@
                     onsubmit="return confirmRemoveReason(this);">
                 {% csrf_token %}
                 <input type="hidden" name="reason" value="">
+                <input type="hidden" name="send_email" value="0">
+
                 <button class="btn danger small" type="submit">Remove</button>
               </form>
 
@@ -319,6 +323,8 @@
         <form id="add-trainer-form" method="post" action="{% url 'add_trainer' training.pk %}">
           {% csrf_token %}
           <input type="hidden" name="sysper_id" id="trainer-sysper-id">
+          <input type="hidden" name="send_email" value="0">
+
         </form>
 
         <input type="text" id="trainer-search" placeholder="Type 2+ chars (name or SYSPER ID)..." autocomplete="off">
@@ -411,6 +417,7 @@
                     onsubmit="return confirmRemoveReason(this);">
                 {% csrf_token %}
                 <input type="hidden" name="reason" value="">
+                <input type="hidden" name="send_email" value="0">
                 <button class="btn danger small" type="submit">Remove</button>
               </form>
 
@@ -427,13 +434,14 @@
   <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
     <div>
       <h2 style="margin:0 0 6px;">Emails</h2>
-      <div class="help" style="margin:0;">
-        Participants: {{ participants_count|default:0 }} ·
-        Authorised: {{ authorised_count|default:0 }} ·
-        Pending: {{ pending_count|default:0 }} ·
+      <div class="help" style="margin:0;" id="emailStats">
+        Participants: <span id="participantsCount">{{ participants_count|default:0 }}</span> ·
+        Authorised: <span id="authorisedCount">{{ authorised_count|default:0 }}</span> ·
+        Pending: <span id="pendingCount">{{ pending_count|default:0 }}</span> ·
         “Assigned” logged: {{ assigned_logged_count|default:0 }}
       </div>
 
+      <div id="pendingBanner">
       {% if pending_count|default:0 > 0 %}
         <div class="flash error" style="margin-top:10px;">
           {{ pending_count }} participant(s) are still PENDING — emails cannot be sent until resolved.
@@ -444,12 +452,12 @@
         </div>
       {% endif %}
     </div>
+    
 
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
       <!-- ✅ renamed button -->
-      <a class="btn primary" href="{% url 'training_email_compose' training.id %}">
-        Send email
-      </a>
+      <a class="btn primary" id="sendEmailBtn" href="{% url 'training_email_compose' training.id %}">  Send email</a>
+
 
       <!-- ✅ moved from top card -->
       <a class="btn secondary" href="{% url 'training_email_logs' training.id %}">
@@ -504,6 +512,22 @@
   </div>
 
   <script>
+
+
+function checkPendingBeforeCompose() {
+      const pendingEl = document.getElementById("pendingCount");
+      const pending = pendingEl ? parseInt(pendingEl.textContent || "0", 10) : 0;
+
+      if (pending > 0) {
+        alert(`There are still ${pending} PENDING participant(s). Resolve statuses before sending emails.`);
+        return false; // block navigation
+      }
+      return true;
+    }
+
+
+
+
     function debounce(fn, ms) {
       let t;
       return (...args) => {
@@ -586,74 +610,145 @@
       selectEl.classList.add("status-" + statusValue.toLowerCase());
     }
 
-    async function updateParticipationStatus(selectEl) {
-      const url = selectEl.dataset.url;
-      const status = selectEl.value;
-      const original = selectEl.dataset.original || "";
-      const pid = selectEl.dataset.pid;
+    async function refreshEmailSummaryReminder() {
+  try {
+    const res = await fetch("{% url 'training_email_summary' training.pk %}", {
+      headers: { "Accept": "application/json" }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.ok) return;
 
-      setStatusClass(selectEl, status);
+    const pc = document.getElementById("participantsCount");
+    const ac = document.getElementById("authorisedCount");
+    const pend = document.getElementById("pendingCount");
+    const banner = document.getElementById("pendingBanner");
 
-      try {
-        const formData = new FormData();
-        formData.append("status", status);
+    if (pc) pc.textContent = data.participants_count;
+    if (ac) ac.textContent = data.authorised_count;
+    if (pend) pend.textContent = data.pending_count;
 
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "X-CSRFToken": getCookie("csrftoken"),
-            "X-Requested-With": "XMLHttpRequest",
-          },
-          body: formData,
-        });
-
-        if (!res.ok) throw new Error("Request failed: " + res.status);
-
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "Unknown error");
-
-        selectEl.dataset.original = data.status;
-        setStatusClass(selectEl, data.status);
-
-        const auditEl = document.querySelector(`.status-audit[data-audit-for="${pid}"]`);
-        if (auditEl) {
-          auditEl.style.display = "block";
-          const labelMap = {
-            "AUTHORISED": "Authorised",
-            "PENDING": "Pending",
-            "REJECTED": "Rejected",
-            "WITHDRAWN": "Withdrawn"
-          };
-          const label = labelMap[data.status] || data.status;
-          auditEl.textContent = `${label} on ${data.changed_at} by ${data.changed_by}`;
-        }
-
-      } catch (err) {
-        if (original) {
-          selectEl.value = original;
-          setStatusClass(selectEl, original);
-        }
-        alert("Could not update status. Please try again.");
-        console.error(err);
+    if (banner) {
+      if (data.pending_count > 0) {
+        banner.innerHTML = `
+          <div class="flash error" style="margin-top:10px;">
+            ${data.pending_count} participant(s) are still PENDING — emails cannot be sent until resolved.
+          </div>`;
+      } else {
+        banner.innerHTML = `
+          <div class="flash success" style="margin-top:10px;">
+            No PENDING participants — emails can be sent.
+          </div>`;
       }
     }
+  } catch (e) {
+    console.warn("Could not refresh email summary", e);
+  }
+}
 
-    document.addEventListener("change", function(e) {
-      const el = e.target;
-      if (el && el.classList.contains("status-select")) {
-        updateParticipationStatus(el);
-      }
+async function updateParticipationStatus(selectEl) {
+  const url = selectEl.dataset.url;
+  const status = selectEl.value;
+  const original = selectEl.dataset.original || "";
+  const pid = selectEl.dataset.pid;
+
+  // confirm / email prompt
+  let sendEmail = "0";
+
+  if (original === "AUTHORISED" && status !== "AUTHORISED") {
+    const ok = confirm("This person is currently AUTHORISED. Are you sure you want to change their status?");
+    if (!ok) {
+      selectEl.value = original;
+      setStatusClass(selectEl, original);
+      return;
+    }
+    sendEmail = confirm("Send an email to the participant about this status change?") ? "1" : "0";
+  } else if (status === "WITHDRAWN") {
+    // (optional) prompt on withdraw from other statuses
+    sendEmail = confirm("Send an email to the participant informing them they were withdrawn?") ? "1" : "0";
+  }
+
+  // optimistic UI
+  setStatusClass(selectEl, status);
+
+  try {
+    const formData = new FormData();
+    formData.append("status", status);
+    formData.append("send_email", sendEmail);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": getCookie("csrftoken"),
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: formData,
     });
 
+    if (!res.ok) throw new Error("Request failed: " + res.status);
 
-    
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Unknown error");
+
+    // final UI based on server response
+    selectEl.dataset.original = data.status;
+    setStatusClass(selectEl, data.status);
+
+    const auditEl = document.querySelector(`.status-audit[data-audit-for="${pid}"]`);
+    if (auditEl) {
+      auditEl.style.display = "block";
+      const labelMap = {
+        "AUTHORISED": "Authorised",
+        "PENDING": "Pending",
+        "REJECTED": "Rejected",
+        "WITHDRAWN": "Withdrawn"
+      };
+      const label = labelMap[data.status] || data.status;
+      auditEl.textContent = `${label} on ${data.changed_at} by ${data.changed_by}`;
+    }
+
+    // ✅ refresh email banner + counts
+    await refreshEmailSummaryReminder();
+
+  } catch (err) {
+    // revert UI
+    if (original) {
+      selectEl.value = original;
+      setStatusClass(selectEl, original);
+    }
+    alert("Could not update status. Please try again.");
+    console.error(err);
+  }
+}
+
+document.addEventListener("change", function (e) {
+  const el = e.target;
+  if (el && el.classList.contains("status-select")) {
+    updateParticipationStatus(el);
+  }
+});
+
     function confirmRemoveReason(form) {
       const reason = prompt("Why is this person being removed from the training?");
       if (reason === null) return false; // cancel
 
-      form.querySelector('input[name="reason"]').value = reason.trim();
+      const cleaned = reason.trim();
+      form.querySelector('input[name="reason"]').value = cleaned;
+
+      // Second prompt: ask whether to email the participant
+      const sendEmail = confirm("Send an email to the participant informing them they were removed?");
+      let sendField = form.querySelector('input[name="send_email"]');
+      if (!sendField) {
+        sendField = document.createElement("input");
+        sendField.type = "hidden";
+        sendField.name = "send_email";
+        form.appendChild(sendField);
+      }
+      sendField.value = sendEmail ? "1" : "0";
+
       return true;
     }
+
 
     (function () {
       function norm(v) {
@@ -684,6 +779,24 @@
 
       document.querySelectorAll('form[action*="update_trainer_days"]').forEach(wireDaysForm);
     })();
+
+
+    document.addEventListener("DOMContentLoaded", function () {
+      const btn = document.getElementById("sendEmailBtn");
+      if (!btn) return;
+
+      btn.addEventListener("click", function (e) {
+        const pendingEl = document.getElementById("pendingCount");
+        const pending = pendingEl ? parseInt((pendingEl.textContent || "0").trim(), 10) : 0;
+
+        if (pending > 0) {
+          e.preventDefault();
+          alert(`There are still ${pending} PENDING participant(s). Resolve statuses before sending emails.`);
+        }
+      });
+    });
+
+    
   </script>
 
 

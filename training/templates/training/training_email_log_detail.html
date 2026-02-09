@@ -1,84 +1,138 @@
 {% extends "training/base.html" %}
 
 {% block content %}
+<style>
+  .log-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .log-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .log-k {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .log-v {
+    font-size: 0.9rem;
+  }
+
+  .log-body {
+    font-size: 0.95rem;
+    white-space: pre-wrap;
+  }
+</style>
 
 <div class="wrap">
   <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap;">
     <div>
       <h2 style="margin:0;">Email log detail</h2>
       <div style="opacity:0.8; font-size:0.9rem;">
-        Training: <strong>{{ training.name }}</strong>
+        Training: <strong>{{ training.course_name }}</strong>
       </div>
     </div>
+
     <div class="actions">
       <a class="btn secondary" href="{% url 'training_email_logs' training.id %}">Back to logs</a>
       <a class="btn secondary" href="{% url 'training_email_compose' training.id %}">Compose</a>
     </div>
   </div>
 
-  <div class="card">
-    <div class="row">
-      <div class="k">Sent at</div>
-      <div class="v">{{ log.sent_at|date:"Y-m-d H:i" }}</div>
+  <div class="card" style="font-size:13px;">
+    <!-- Sent at -->
+    <div class="log-row">
+      <div class="log-k">Sent at</div>
+      <div class="log-v">{{ log.sent_at|date:"d/m/Y H:i" }}</div>
     </div>
 
-    <div class="row">
-      <div class="k">Type</div>
-      <div class="v"><span class="pill">{{ log.template_type }}</span></div>
+
+    <!-- Type -->
+    <div class="log-row">
+      <div class="log-k" style="font-weight:700;">Type:</div>
+      <div class="log-v">
+        <span class="pill">{{ log.template_type|default:"—"}}</span>
+      </div>
     </div>
 
-    <div class="row">
-      <div class="k">Recipient</div>
-      <div class="v">
+    <!-- Recipient -->
+    <div class="log-row">
+      <div class="log-k" style="font-weight:700;">Recipient:</div>
+      <div class="log-v">
         {% if log.person %}
-          {{ log.person.last_name }} {{ log.person.first_name }}
-          <div class="k" style="margin-top:4px;">SYSPER ID: {{ log.person.sysper_id|default:"—" }}</div>
-          <div class="k">Email: {{ log.person.email|default:"—" }}</div>
+          <div style="font-weight:700; font-size:14px; color:var(--text);">
+            {{ log.person.last_name }} {{ log.person.first_name }}
+          </div>
+
+          <div style="margin-top:4px; color:var(--muted);">
+            <div><strong>SYSPER ID:</strong> {{ log.person.sysper_id|default:"—" }}</div>
+            <div><strong>Email:</strong> {{ log.person.email|default:"—" }}</div>
+          </div>
         {% else %}
-          {{ log.external_recipient_name|default:"—" }}
-          <div class="k" style="margin-top:4px;">Email: {{ log.external_recipient_email|default:"—" }}</div>
+          <div style="font-weight:700; font-size:14px; color:var(--text);">
+            {{ log.external_recipient_name|default:"—" }}
+          </div>
+          <div style="margin-top:4px; color:var(--muted);">
+            <strong>Email:</strong> {{ log.external_recipient_email|default:"—" }}
+          </div>
         {% endif %}
       </div>
     </div>
 
-    <div class="row">
-      <div class="k">Subject</div>
-      <div class="v">{{ log.subject|default:"(no subject)" }}</div>
+    <!-- Subject -->
+    <div class="log-row">
+      <div class="log-k" style="font-weight:700;">Subject:</div>
+      <div class="log-v" style="font-weight:700; color:var(--text);">
+        {{ log.subject|default:"(no subject)" }}
+      </div>
     </div>
 
-    <div class="row">
-      <div class="k">Delivery status</div>
-      <div class="v">
+    <!-- Delivery -->
+    <div class="log-row">
+      <div class="log-k" style="font-weight:700;">Delivery:</div>
+      <div class="log-v">
         {% if log.delivery_status %}
           <span class="pill">{{ log.delivery_status }}</span>
         {% else %}
           —
         {% endif %}
+
         {% if log.error_message %}
-          <div class="k" style="margin-top:6px;">Error</div>
-          <pre class="k">{{ log.error_message }}</pre>
+          <div style="margin-top:8px; color:var(--muted); font-weight:700;">Error:</div>
+          <pre style="margin:6px 0 0; white-space:pre-wrap; font-size:12px; color:var(--muted);">{{ log.error_message }}</pre>
         {% endif %}
       </div>
     </div>
-
-    <div class="row">
-      <div class="k">Body</div>
-      <div class="v" style="font-weight:400;">
-        <pre>{{ log.body|default:"" }}</pre>
+    <p></p>
+    <!-- Body -->
+    <div class="rlog-ow">
+      <div class="log-k" style="font-weight:700;">Body:</div>
+      <div class="log-v" style="font-weight:400;">
+        <pre style="margin:0; white-space:pre-wrap; font-size:15px; line-height:1.45; color:var(--text);">{{ log.body|default:"" }}</pre>
       </div>
     </div>
   </div>
 
   <div class="actions">
-    {% if log.person %}
-      <form method="post" action="{% url 'training_email_resend_one' training.id log.person.id %}">
+    {% if log.person and log.delivery_status == "FAILED" %}
+      <form method="post"
+            action="{% url 'training_email_resend_one' training.id log.person.id %}">
         {% csrf_token %}
-        <button class="btn" type="submit">Resend</button>
+        <button class="btn danger" type="submit">
+          Resend failed email
+        </button>
       </form>
-    {% else %}
-      <button class="btn" type="button" disabled title="Resend is only available for participant emails">Resend</button>
     {% endif %}
-
   </div>
+
 </div>
+
 {% endblock %}

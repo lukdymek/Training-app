@@ -9,6 +9,11 @@
     Editing: <strong>{{ training.course_name }}</strong>
   </p>
 {% endif %}
+{% if is_edit and has_active_participants %}
+  <div class="flash error" style="margin:10px 0 14px;">
+    This training already has participants. Only <strong>Capacity</strong> and <strong>Remarks</strong> can be changed.
+  </div>
+{% endif %}
 
     <p class="help">Fill in the details below. You can add trainees and trainers after saving.</p>
 
