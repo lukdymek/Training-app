@@ -35,18 +35,18 @@ EMAIL_BACKEND = os.environ.get(
 
 
 # ---- Mailgun via django-anymail ----
-if EMAIL_BACKEND == "anymail.backends.mailgun.EmailBackend":
-
-    
-
+if EMAIL_BACKEND in (
+    "anymail.backends.sendinblue.EmailBackend",
+    "anymail.backends.brevo.EmailBackend",
+):
     ANYMAIL = {
-        "MAILGUN_API_KEY": os.environ.get("MAILGUN_API_KEY", ""),
-        "MAILGUN_SENDER_DOMAIN": os.environ.get("MAILGUN_DOMAIN", ""),
+        # Anymail will look for SENDINBLUE_API_KEY in ANYMAIL
+        "SENDINBLUE_API_KEY": os.environ.get("SENDINBLUE_API_KEY", ""),
     }
 
     DEFAULT_FROM_EMAIL = os.environ.get(
         "DEFAULT_FROM_EMAIL",
-        f"Training App <postmaster@{os.environ.get('MAILGUN_DOMAIN', 'example.com')}>",
+        "Training App <no-reply@example.com>",
     )
 
 
