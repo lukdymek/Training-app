@@ -2837,6 +2837,7 @@ def training_email_compose(request, pk):
         created = 0
         skipped = 0
         skipped_no_email = 0
+        skipped_no_assigned = 0
 
         if recipient_mode == "admin_group":
             for row in recipient_rows:
