@@ -296,3 +296,22 @@ textarea{min-height: 110px; resize: vertical}
 .nav-dropdown:focus-within .nav-dropdown-content{
   display: block;
 }
+
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;              /* space between logo and text */
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.brand-logo {
+  height: 32px;           /* adjust: 24–40px works well */
+  width: auto;
+  display: block;
+}
+
+.brand-text {
+  white-space: nowrap;    /* prevents wrapping */
+}

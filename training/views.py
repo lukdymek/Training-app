@@ -498,54 +498,49 @@ def training_edit(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
     has_active_participants = Participation.objects.filter(
-        training=training,
-        removed_at__isnull=True,
+        training=training, removed_at__isnull=True
     ).exists()
+
+    locked_fields = ["course_name", "subject", "start_at", "end_at", "location", "uof_iteration"]
 
     if request.method == "POST":
         form = TrainingForm(request.POST, instance=training)
 
+        # ✅ IMPORTANT: disable locked fields on POST too
+        if has_active_participants:
+            for name in locked_fields:
+                if name in form.fields:
+                    form.fields[name].disabled = True
+
         if form.is_valid():
             if has_active_participants:
-                # ✅ Only allow capacity + remarks to change
+                # Only these may change
                 allowed = {"capacity", "remarks"}
 
                 changed = set(form.changed_data)
                 forbidden = changed - allowed
 
+                # Normally, forbidden should be empty because fields are disabled,
+                # but keep your safety check anyway.
                 if forbidden:
                     messages.error(
                         request,
                         "This training already has participants. You can only change Capacity and Remarks."
                     )
-                    # revert forbidden fields to original values
-                    for field in forbidden:
-                        form.cleaned_data[field] = getattr(training, field)
-                    # Save only allowed fields if present
-                    save_fields = [f for f in changed if f in allowed]
-                    if save_fields:
-                        for f in save_fields:
-                            setattr(training, f, form.cleaned_data[f])
-                        training.save(update_fields=save_fields)
-                        messages.success(request, "Saved changes (Capacity/Remarks).")
                     return redirect("training_detail", pk=pk)
 
-                # if they only changed allowed fields, save normally
-                form.save()
+                form.save()  # will only save capacity/remarks if those changed
                 messages.success(request, "Saved changes.")
                 return redirect("training_detail", pk=pk)
 
-            # ✅ no participants -> free editing
             form.save()
             messages.success(request, "Saved changes.")
             return redirect("training_detail", pk=pk)
 
     else:
         form = TrainingForm(instance=training)
-
-        # ✅ UI: disable fields when participants exist
         if has_active_participants:
-            for name in ["course_name", "subject", "start_at", "end_at", "location", "uof_iteration"]:
+            for name in locked_fields:
                 if name in form.fields:
                     form.fields[name].disabled = True
 
@@ -557,6 +552,7 @@ def training_edit(request, pk):
         "submit_label": "Save",
         "has_active_participants": has_active_participants,
     })
+
 
 
 @login_required
