@@ -29,21 +29,6 @@
         </select>
       </div>
 
-      {% if recipient_mode != "admin_group" %}
-        <div class="form-row" style="min-width:200px;">
-          <label>Message type</label>
-          <select id="templateType" name="template_type" onchange="this.form.submit()">
-            <option value="ASSIGNED" {% if template_type == "ASSIGNED" %}selected{% endif %}>Assigned</option>
-            <option value="STATUS_CHANGE" {% if template_type == "STATUS_CHANGE" %}selected{% endif %}>Status changed</option>
-            <!-- hide ADMIN_SUMMARY in participant modes -->
-          </select>
-        </div>
-      {% else %}
-        <!-- When admin_group, force type but keep it submitted -->
-        <input type="hidden" name="template_type" value="ADMIN_SUMMARY">
-      {% endif %}
-
-
       {% if recipient_mode == "admin_group" %}
         <div class="form-row" style="min-width:260px;">
           <label>Group</label>
@@ -86,7 +71,6 @@
     <!-- Persist selections -->
     <input type="hidden" name="mode" value="{{ recipient_mode }}">
     <input type="hidden" name="template_id" value="{{ template_id }}">
-    <input type="hidden" name="template_type" value="{{ template_type }}">
     <input type="hidden" name="group_id" value="{{ group_id }}">
 
     <div class="form-row">
@@ -235,31 +219,5 @@
     </table>
   </div>
 </div>
-
-<!-- ===== AUTO SWITCH JS ===== -->
-<script>
-(function () {
-  const mode = document.getElementById("recipientMode");
-  const type = document.getElementById("templateType");
-  if (!mode || !type) return;
-
-  function autoSwitch() {
-    // if admin group, force ADMIN_SUMMARY
-    if (mode.value === "admin_group") {
-      if (type.value !== "ADMIN_SUMMARY") {
-        type.value = "ADMIN_SUMMARY";
-      }
-    } else {
-      // if not admin group, don't allow ADMIN_SUMMARY lingering
-      if (type.value === "ADMIN_SUMMARY") {
-        type.value = "ASSIGNED";
-      }
-    }
-  }
-
-  autoSwitch();
-  mode.addEventListener("change", autoSwitch);
-})();
-</script>
 
 {% endblock %}

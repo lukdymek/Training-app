@@ -1,10 +1,12 @@
 import csv
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
+from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -20,8 +22,17 @@ from training.models import (
     TrainingEmailLog,
 )
 
-from .auth import send_log_email
 from .common import staff_required
+
+
+def _infer_participant_template_type(template) -> str:
+    """Best-effort mapping for participant templates when no explicit type exists."""
+    name = (getattr(template, "name", "") or "").upper()
+    subject = (getattr(template, "subject", "") or "").upper()
+    haystack = f"{name} {subject}"
+    if any(token in haystack for token in ("STATUS", "REJECT", "WITHDRAW")):
+        return "STATUS_CHANGE"
+    return "ASSIGNED"
 
 
 @login_required
@@ -103,23 +114,12 @@ def training_email_compose(request, pk):
     )
     pending_count = active_parts.filter(status="PENDING").count()
 
-    # ---- UI selections (mode, group, template type, template) ----
+    # ---- UI selections (mode, group, template) ----
     recipient_mode = (request.GET.get("mode") or request.POST.get("mode") or "admin_group").strip().lower()
     if recipient_mode not in ("participants", "trainees", "trainers", "admin_group"):
         recipient_mode = "participants"
 
-    template_type = (request.GET.get("template_type") or request.POST.get("template_type") or "ASSIGNED").strip().upper()
-    if template_type not in ("ASSIGNED", "STATUS_CHANGE", "ADMIN_SUMMARY"):
-        template_type = "ASSIGNED"
-
-    # ---- ENFORCE VALID COMBINATIONS (SERVER-SIDE) ----
-    # Admin group must always use ADMIN_SUMMARY
-    if recipient_mode == "admin_group":
-        template_type = "ADMIN_SUMMARY"
-    else:
-        # Participant modes must not use ADMIN_SUMMARY
-        if template_type == "ADMIN_SUMMARY":
-            template_type = "ASSIGNED"
+    template_type = "ADMIN_SUMMARY" if recipient_mode == "admin_group" else "ASSIGNED"
 
     groups = EmailRecipientGroup.objects.filter(is_active=True).order_by("name")
     group_id = (request.GET.get("group_id") or request.POST.get("group_id") or "").strip()
@@ -127,8 +127,8 @@ def training_email_compose(request, pk):
     if group_id.isdigit():
         selected_group = groups.filter(id=int(group_id)).first()
 
-    # ---- Templates list depends on mode/type ----
-    if template_type == "ADMIN_SUMMARY":
+    # ---- Templates list depends on recipient mode ----
+    if recipient_mode == "admin_group":
         templates = EmailTemplate.objects.filter(is_active=True, kind="ADMIN").order_by("name")
     else:
         templates = EmailTemplate.objects.filter(is_active=True, kind="PARTICIPANT").order_by("name")
@@ -137,6 +137,8 @@ def training_email_compose(request, pk):
     selected_template = None
     if template_id and str(template_id).isdigit():
         selected_template = templates.filter(id=int(template_id)).first()
+    if recipient_mode != "admin_group" and selected_template:
+        template_type = _infer_participant_template_type(selected_template)
 
     default_template = selected_template or (templates.first() if templates.exists() else None)
     subject_prefill = default_template.subject if default_template else ""
@@ -144,6 +146,17 @@ def training_email_compose(request, pk):
 
     subject = (request.POST.get("subject") if request.method == "POST" else None) or subject_prefill
     body = (request.POST.get("body") if request.method == "POST" else None) or body_prefill
+
+    def compose_redirect():
+        params = {
+            "mode": recipient_mode,
+        }
+        if template_id:
+            params["template_id"] = str(template_id)
+        if group_id:
+            params["group_id"] = str(group_id)
+        url = reverse("training_email_compose", kwargs={"pk": pk})
+        return redirect(f"{url}?{urlencode(params)}")
 
     # ---- Build recipients + status map (for participants) ----
     people_list = []
@@ -159,7 +172,11 @@ def training_email_compose(request, pk):
         else:
             roles = ["TRAINEE", "TRAINER"]
 
-        candidates = active_parts.filter(status="AUTHORISED", role__in=roles)
+        # STATUS_CHANGE emails are for people currently in a changed terminal status.
+        if template_type == "STATUS_CHANGE":
+            candidates = active_parts.filter(status__in=["REJECTED", "WITHDRAWN"], role__in=roles)
+        else:
+            candidates = active_parts.filter(status="AUTHORISED", role__in=roles)
 
         # Unique people list
         people_map = {}
@@ -171,14 +188,28 @@ def training_email_compose(request, pk):
         people_list = list(people_map.values())
 
     # ---- Up-to-date rules ----
-    def should_log_person(person):
-        # True = should create a NEW log (no duplicate of same template_type)
+    def has_current_status_log(person, current_status):
+        if not current_status:
+            return False
+        return TrainingEmailLog.objects.filter(
+            training=training,
+            person=person,
+            template_type__in=("ASSIGNED", "STATUS_CHANGE"),
+            status_at_send=current_status,
+        ).exists()
+
+    def should_log_person(person, current_status):
+        # For STATUS_CHANGE, skip when the same current status was already logged.
+        if template_type == "STATUS_CHANGE":
+            return not has_current_status_log(person, current_status)
+
+        # For other template types, keep duplicate-by-template behavior.
         return not TrainingEmailLog.objects.filter(
             training=training,
             person=person,
             template_type=template_type,
         ).exists()
-    
+
     def has_assigned_log(person):
         return TrainingEmailLog.objects.filter(
             training=training,
@@ -267,7 +298,8 @@ def training_email_compose(request, pk):
     else:
         for person in people_list:
             email_ok = bool((person.email or "").strip())
-            up_to_date = email_ok and (not should_log_person(person))  # already logged
+            current_status = status_map.get(person.id, "")
+            up_to_date = email_ok and (not should_log_person(person, current_status))  # already logged
 
             # NEW RULE: status change only if assigned was logged before
             needs_assigned_first = (template_type == "STATUS_CHANGE")
@@ -342,7 +374,7 @@ def training_email_compose(request, pk):
         # Admin group requires a selected group
         if recipient_mode == "admin_group" and not group_id:
             messages.error(request, "Please select an admin group before sending/logging.")
-            return redirect("training_email_compose", pk=pk)
+            return compose_redirect()
 
 
         # Only block on PENDING for participant emails
@@ -351,11 +383,11 @@ def training_email_compose(request, pk):
                 request,
                 f"Cannot send emails: {pending_count} participant(s) are still PENDING. Please resolve statuses first."
             )
-            return redirect("training_email_compose", pk=pk)
+            return compose_redirect()
 
         if will_send <= 0:
             messages.error(request, "Nothing to send/log (all recipients are missing email or already up to date).")
-            return redirect("training_email_compose", pk=pk)
+            return compose_redirect()
 
         created = 0
         skipped = 0
@@ -371,6 +403,7 @@ def training_email_compose(request, pk):
                 if not should_log_admin(rec):
                     skipped += 1
                     continue
+
                 trainees_block, trainers_block = build_admin_blocks()
                 ctx = {
                     "training": training,
@@ -386,45 +419,35 @@ def training_email_compose(request, pk):
                 rendered_body = render_email_text(body, ctx)
 
                 log = TrainingEmailLog.objects.create(
-                training=training,
-                person=None,
-                external_recipient_name=rec.name,
-                external_recipient_email=rec.email,
-                template_type="ADMIN_SUMMARY",
-                subject=rendered_subject,
-                body=rendered_body,
-                status_at_send="",
-                sent_by=request.user,
-                delivery_status="LOGGED",
-                error_message="",
-                sent_to=rec.email,
-            )
+                    training=training,
+                    person=None,
+                    external_recipient_name=rec.name,
+                    external_recipient_email=rec.email,
+                    template_type="ADMIN_SUMMARY",
+                    subject=rendered_subject,
+                    body=rendered_body,
+                    status_at_send="",
+                    sent_by=request.user,
+                    delivery_status="LOGGED",
+                    error_message="",
+                    sent_to=rec.email,
+                )
 
-            try:
-                send_log_email(rec.email, rendered_subject, rendered_body)
-                log.delivery_status = "SENT"
-                log.error_message = ""
-            except Exception as e:
-                log.delivery_status = "FAILED"
-                log.error_message = str(e)
-
-            log.save(update_fields=["delivery_status", "error_message"])
-            created += 1
-
+                created += 1
 
         else:
-            skipped_no_assigned = 0
             for person in people_list:
                 if not (person.email or "").strip():
                     skipped_no_email += 1
                     continue
 
-                # NEW RULE: status change only if assigned was logged before
+                # STATUS_CHANGE requires an ASSIGNED baseline first
                 if template_type == "STATUS_CHANGE" and not has_assigned_log(person):
                     skipped_no_assigned += 1
                     continue
 
-                if not should_log_person(person):
+                current_status = status_map.get(person.id, "")
+                if not should_log_person(person, current_status):
                     skipped += 1
                     continue
 
@@ -432,7 +455,7 @@ def training_email_compose(request, pk):
                 ctx = {
                     "training": training,
                     "person": person,
-                    "status": status_map.get(person.id, ""),
+                    "status": current_status,
                     "role": _role,
                     "role_label": (_role or "").replace("_", " ").title(),
                 }
@@ -440,31 +463,21 @@ def training_email_compose(request, pk):
                 rendered_body = render_email_text(body, ctx)
 
                 log = TrainingEmailLog.objects.create(
-                training=training,
-                person=person,
-                external_recipient_name="",
-                external_recipient_email="",
-                template_type=template_type,
-                subject=rendered_subject,
-                body=rendered_body,
-                status_at_send=status_map.get(person.id, ""),
-                sent_by=request.user,
-                delivery_status="LOGGED",
-                error_message="",
-                sent_to=person.email,
-            )
+                    training=training,
+                    person=person,
+                    external_recipient_name="",
+                    external_recipient_email="",
+                    template_type=template_type,
+                    subject=rendered_subject,
+                    body=rendered_body,
+                    status_at_send=current_status,
+                    sent_by=request.user,
+                    delivery_status="LOGGED",
+                    error_message="",
+                    sent_to=person.email,
+                )
 
-            try:
-                send_log_email(person.email, rendered_subject, rendered_body)
-                log.delivery_status = "SENT"
-                log.error_message = ""
-            except Exception as e:
-                log.delivery_status = "FAILED"
-                log.error_message = str(e)
-
-            log.save(update_fields=["delivery_status", "error_message"])
-            created += 1
-
+                created += 1
 
         if created:
             messages.success(request, f"Logged emails for {created} recipient(s).")
@@ -496,9 +509,9 @@ def training_email_compose(request, pk):
             "templates": templates,
             "selected_template": selected_template,
             "template_id": (
-                selected_template.id
+                str(selected_template.id)
                 if selected_template
-                else (default_template.id if default_template else "")
+                else (str(default_template.id) if default_template else "")
             ),
 
             # message content
@@ -958,7 +971,7 @@ def training_email_admin_compose(request, pk):
             "pending_count": pending_count,
 
             "templates": templates,
-            "template_id": default_template.id if default_template else "",
+            "template_id": str(default_template.id) if default_template else "",
             "selected_template": selected_template,
 
             "subject": subject,
