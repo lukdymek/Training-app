@@ -23,6 +23,9 @@
         <div class="form-row">
           <label>Completion status</label>
           {{ form.completion_status }}
+          {% if is_uof %}
+            <div class="help">For Use of force trainings, this value is read-only and comes from the Results page.</div>
+          {% endif %}
         </div>
 
         <div class="form-row">

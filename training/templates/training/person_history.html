@@ -67,6 +67,7 @@
           <tr>
             <th>Training</th>
             <th>Role</th>
+            <th>Pass/Fail</th>
             <th>Start</th>
             <th>End</th>
             <th>Location</th>
@@ -80,13 +81,14 @@
                 <a href="{% url 'training_detail' p.training.id %}"><strong>{{ p.training.course_name }}</strong></a>
               </td>
               <td><span class="pill">{{ p.role }}</span></td>
+              <td>{{ p.completion_status_display }}</td>
               <td>{{ p.training.start_at }}</td>
               <td>{{ p.training.end_at }}</td>
               <td>{{ p.training.location }}</td>
               <td>{% if p.training.subject %}{{ p.training.subject.name }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" style="color:var(--muted);">No upcoming trainings.</td></tr>
+            <tr><td colspan="7" style="color:var(--muted);">No upcoming trainings.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -105,6 +107,7 @@
             <tr>
               <th>Training</th>
               <th>Role</th>
+              <th>Pass/Fail</th>
               <th>Start</th>
               <th>End</th>
               <th>Location</th>
@@ -118,6 +121,7 @@
                   <a href="{% url 'training_detail' p.training.id %}"><strong>{{ p.training.course_name }}</strong></a>
                 </td>
                 <td><span class="pill">{{ p.role }}</span></td>
+                <td>{{ p.completion_status_display }}</td>
                 <td>{{ p.training.start_at }}</td>
                 <td>{{ p.training.end_at }}</td>
                 <td>{{ p.training.location }}</td>
@@ -141,6 +145,7 @@
           <tr>
             <th>Training</th>
             <th>Role</th>
+            <th>Pass/Fail</th>
             <th>Start</th>
             <th>End</th>
             <th>Location</th>
@@ -154,13 +159,14 @@
                 <a href="{% url 'training_detail' p.training.id %}"><strong>{{ p.training.course_name }}</strong></a>
               </td>
               <td><span class="pill">{{ p.role }}</span></td>
+              <td>{{ p.completion_status_display }}</td>
               <td>{{ p.training.start_at }}</td>
               <td>{{ p.training.end_at }}</td>
               <td>{{ p.training.location }}</td>
               <td>{% if p.training.subject %}{{ p.training.subject.name }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="6" style="color:var(--muted);">No completed trainings.</td></tr>
+            <tr><td colspan="7" style="color:var(--muted);">No completed trainings.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -225,3 +231,7 @@
   {% endif %}
 
 {% endblock %}
+
+
+
+

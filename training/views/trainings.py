@@ -828,9 +828,22 @@ def participation_edit(request, participation_id):
         return render(request, "training/forbidden_nice.html", status=403)
 
     participation = get_object_or_404(Participation, id=participation_id)
+    subj_name = (getattr(participation.training.subject, "name", "") or "").strip().lower()
+    is_uof = subj_name in ("use of force", "uof")
+
+    if is_uof:
+        try:
+            assessment = participation.uof_assessment
+            has_scores = any(
+                value is not None and value != ""
+                for value in (assessment.pushups, assessment.situps, assessment.run_seconds)
+            )
+            participation.completion_status = ("PASS" if assessment.passed else "FAIL") if has_scores else ""
+        except Exception:
+            participation.completion_status = ""
 
     if request.method == "POST":
-        form = ParticipationEditForm(request.POST, instance=participation)
+        form = ParticipationEditForm(request.POST, instance=participation, lock_completion=is_uof)
         if form.is_valid():
             obj = form.save(commit=False)
 
@@ -842,9 +855,13 @@ def participation_edit(request, participation_id):
             messages.success(request, "Participation updated.")
             return redirect("training_detail", pk=participation.training_id)
     else:
-        form = ParticipationEditForm(instance=participation)
+        form = ParticipationEditForm(instance=participation, lock_completion=is_uof)
 
-    return render(request, "training/participation_edit.html", {"p": participation, "form": form})
+    return render(
+        request,
+        "training/participation_edit.html",
+        {"p": participation, "form": form, "is_uof": is_uof},
+    )
 
 
 @login_required

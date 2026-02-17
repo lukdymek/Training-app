@@ -13,6 +13,36 @@ from training.models import Participation, Person
 from .common import staff_required
 
 
+def _is_uof_training(participation):
+    subject = getattr(participation.training, "subject", None)
+    name = (getattr(subject, "name", "") or "").strip().lower()
+    return name in ("use of force", "uof")
+
+
+def _uof_completion_display(participation):
+    try:
+        assessment = participation.uof_assessment
+    except Exception:
+        return ""
+
+    has_scores = any(
+        value is not None and value != ""
+        for value in (assessment.pushups, assessment.situps, assessment.run_seconds)
+    )
+    if not has_scores:
+        return ""
+    return "PASS" if assessment.passed else "FAIL"
+
+
+def _with_completion_display(rows):
+    for p in rows:
+        if _is_uof_training(p):
+            p.completion_status_display = _uof_completion_display(p)
+        else:
+            p.completion_status_display = p.completion_status or ""
+    return rows
+
+
 def reports_home(request):
     return render(request, "training/reports_home.html")
 
@@ -29,9 +59,10 @@ def report_person(request):
         if person:
             rows = (
                 Participation.objects.filter(person=person, removed_at__isnull=True)
-                .select_related("training", "training__subject")
+                .select_related("training", "training__subject", "uof_assessment")
                 .order_by("-training__start_at")
             )
+            rows = _with_completion_display(list(rows))
 
     return render(
         request,

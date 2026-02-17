@@ -77,6 +77,11 @@ class AddMultipleTrainersForm(forms.Form):
 
 
 class ParticipationEditForm(forms.ModelForm):
+    def __init__(self, *args, lock_completion=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if lock_completion:
+            self.fields["completion_status"].disabled = True
+
     class Meta:
         model = Participation
         fields = ["status_comment", "completion_status", "feedback", "pos_comment"]

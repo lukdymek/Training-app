@@ -253,6 +253,13 @@ def uof_save_scores(request, training_id, participation_id):
         compute_uof(assessment)
         assessment.save()
 
+        has_scores = any(
+            value is not None and value != ""
+            for value in (assessment.pushups, assessment.situps, assessment.run_seconds)
+        )
+        participation.completion_status = ("PASS" if assessment.passed else "FAIL") if has_scores else ""
+        participation.save(update_fields=["completion_status"])
+
         return JsonResponse(
             {
                 "ok": True,

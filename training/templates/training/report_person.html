@@ -124,6 +124,7 @@
           <thead>
             <tr>
               <th>Role</th>
+              <th>Pass/Fail</th>
               <th>Course</th>
               <th>Subject</th>
               <th>Start</th>
@@ -135,6 +136,7 @@
             {% for p in rows %}
               <tr>
                 <td><span class="pill">{{ p.role }}</span></td>
+                <td>{{ p.completion_status_display }}</td>
                 <td><a href="{% url 'training_detail' p.training.pk %}"><strong>{{ p.training.course_name }}</strong></a></td>
                 <td>{% if p.training.subject %}{{ p.training.subject.name }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
                 <td>{{ p.training.start_at }}</td>
@@ -142,7 +144,7 @@
                 <td>{{ p.training.location }}</td>
               </tr>
             {% empty %}
-              <tr><td colspan="6" style="color:var(--muted);">No records.</td></tr>
+              <tr><td colspan="7" style="color:var(--muted);">No records.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -215,3 +217,5 @@
     })();
   </script>
 {% endblock %}
+
+

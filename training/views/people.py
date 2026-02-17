@@ -11,6 +11,36 @@ from training.models import Participation, Person
 from .common import staff_required
 
 
+def _is_uof_training(participation):
+    subject = getattr(participation.training, "subject", None)
+    name = (getattr(subject, "name", "") or "").strip().lower()
+    return name in ("use of force", "uof")
+
+
+def _uof_completion_display(participation):
+    try:
+        assessment = participation.uof_assessment
+    except Exception:
+        return ""
+
+    has_scores = any(
+        value is not None and value != ""
+        for value in (assessment.pushups, assessment.situps, assessment.run_seconds)
+    )
+    if not has_scores:
+        return ""
+    return "PASS" if assessment.passed else "FAIL"
+
+
+def _with_completion_display(rows):
+    for p in rows:
+        if _is_uof_training(p):
+            p.completion_status_display = _uof_completion_display(p)
+        else:
+            p.completion_status_display = p.completion_status or ""
+    return rows
+
+
 @login_required
 @staff_required
 def person_history(request, person_id):
@@ -19,12 +49,18 @@ def person_history(request, person_id):
 
     base_qs = (
         Participation.objects.filter(person=person, removed_at__isnull=True)
-        .select_related("training", "training__subject")
+        .select_related("training", "training__subject", "uof_assessment")
     )
 
-    completed = base_qs.filter(training__end_at__lt=t).order_by("-training__end_at", "-training__start_at")
-    upcoming = base_qs.filter(training__start_at__gte=t).order_by("training__start_at")
-    ongoing = base_qs.filter(training__start_at__lt=t, training__end_at__gte=t).order_by("training__end_at")
+    completed = _with_completion_display(
+        list(base_qs.filter(training__end_at__lt=t).order_by("-training__end_at", "-training__start_at"))
+    )
+    upcoming = _with_completion_display(
+        list(base_qs.filter(training__start_at__gte=t).order_by("training__start_at"))
+    )
+    ongoing = _with_completion_display(
+        list(base_qs.filter(training__start_at__lt=t, training__end_at__gte=t).order_by("training__end_at"))
+    )
 
     removed = (
         Participation.objects.filter(person=person, removed_at__isnull=False)
