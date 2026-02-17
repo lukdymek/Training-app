@@ -43,6 +43,27 @@ def _with_completion_display(rows):
     return rows
 
 
+def _seconds_to_mmss(seconds):
+    if seconds is None:
+        return ""
+    minutes = seconds // 60
+    remainder = seconds % 60
+    return f"{minutes:02d}:{remainder:02d}"
+
+
+def _fmt_dt(value):
+    if not value:
+        return ""
+    return localtime(value).strftime("%Y-%m-%d %H:%M")
+
+
+def _pretty_rating(value):
+    txt = (value or "").strip()
+    if not txt:
+        return ""
+    return txt.replace("_", " ").capitalize()
+
+
 def reports_home(request):
     return render(request, "training/reports_home.html")
 
@@ -88,7 +109,7 @@ def report_person_export(request):
 
     rows = (
         Participation.objects.filter(person=person)
-        .select_related("training", "training__subject")
+        .select_related("training", "training__subject", "uof_assessment", "removed_by")
         .order_by("-training__start_at")
     )
 
@@ -96,20 +117,79 @@ def report_person_export(request):
     resp["Content-Disposition"] = f'attachment; filename="person_{person.sysper_id}_history.csv"'
     w = csv.writer(resp)
 
-    w.writerow([SYSPER_LABEL, "Last name", "First name", "Role", "Course", "Subject", "Start", "End", "Location"])
+    w.writerow(
+        [
+            SYSPER_LABEL,
+            "Last name",
+            "First name",
+            "Role",
+            "Status",
+            "Completion status",
+            "Course",
+            "Subject",
+            "Start",
+            "End",
+            "Location",
+            "Feedback",
+            "POS comment",
+            "Status comment",
+            "Removed at",
+            "Removed by",
+            "Removed reason",
+            "UOF Push-ups",
+            "UOF Sit-ups",
+            "UOF Run (MM:SS)",
+            "UOF Push-ups rating",
+            "UOF Sit-ups rating",
+            "UOF Run rating",
+            "UOF Final result",
+        ]
+    )
     for p in rows:
         t = p.training
+        is_uof = _is_uof_training(p)
+        completion = _uof_completion_display(p) if is_uof else (p.completion_status or "")
+
+        assessment = None
+        if is_uof:
+            try:
+                assessment = p.uof_assessment
+            except Exception:
+                assessment = None
+        uof_pushups = assessment.pushups if assessment else ""
+        uof_situps = assessment.situps if assessment else ""
+        uof_run_mmss = _seconds_to_mmss(assessment.run_seconds) if assessment else ""
+        uof_pushups_rating = _pretty_rating(assessment.pushups_rating) if assessment else ""
+        uof_situps_rating = _pretty_rating(assessment.situps_rating) if assessment else ""
+        uof_run_rating = _pretty_rating(assessment.run_rating) if assessment else ""
+        uof_final = ("PASS" if assessment.passed else "FAIL") if (assessment and completion) else ""
+
         w.writerow(
             [
                 person.sysper_id,
                 person.last_name,
                 person.first_name,
                 p.role,
+                p.status,
+                completion,
                 t.course_name,
                 (t.subject.name if t.subject_id else ""),
-                localtime(t.start_at).strftime("%Y-%m-%d %H:%M"),
-                localtime(t.end_at).strftime("%Y-%m-%d %H:%M"),
+                _fmt_dt(t.start_at),
+                _fmt_dt(t.end_at),
                 t.location,
+                p.feedback or "",
+                p.pos_comment or "",
+                p.status_comment or "",
+                _fmt_dt(p.removed_at),
+                (p.removed_by.get_username() if p.removed_by else ""),
+                p.removed_reason or "",
+                uof_pushups,
+                uof_situps,
+                uof_run_mmss,
+                uof_pushups_rating,
+                uof_situps_rating,
+                uof_run_rating,
+                uof_final,
             ]
         )
     return resp
