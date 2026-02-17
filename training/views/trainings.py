@@ -804,9 +804,6 @@ def participation_set_status(request, participation_id):
                 sent_by=request.user,
             )
 
-        # Respect the UI confirmation: only log "email sent" when explicitly requested.
-        # WITHDRAWN already has its own dedicated template above, so only use
-        # STATUS_CHANGE helper for REJECTED.
         if send_email and new_status == "REJECTED":
             log_status_change_email_if_needed(
                 training=participation.training,

@@ -455,11 +455,9 @@
     
 
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <!-- ✅ renamed button -->
       <a class="btn primary" id="sendEmailBtn" href="{% url 'training_email_compose' training.id %}">  Send email</a>
 
 
-      <!-- ✅ moved from top card -->
       <a class="btn secondary" href="{% url 'training_email_logs' training.id %}">
         Email log
       </a>
@@ -663,9 +661,7 @@ async function updateParticipationStatus(selectEl) {
       return;
     }
     sendEmail = confirm("Send an email to the participant about this status change?") ? "1" : "0";
-  } else if (status === "WITHDRAWN") {
-    // (optional) prompt on withdraw from other statuses
-    sendEmail = confirm("Send an email to the participant informing them they were withdrawn?") ? "1" : "0";
+  } else if (status === "WITHDRAWN") {sendEmail = confirm("Send an email to the participant informing them they were withdrawn?") ? "1" : "0";
   }
 
   // optimistic UI
@@ -707,7 +703,6 @@ async function updateParticipationStatus(selectEl) {
       auditEl.textContent = `${label} on ${data.changed_at} by ${data.changed_by}`;
     }
 
-    // ✅ refresh email banner + counts
     await refreshEmailSummaryReminder();
 
   } catch (err) {

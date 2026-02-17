@@ -1,4 +1,3 @@
-{# One training card - same layout as before #}
 <div class="rowline">
   <div class="rowleft">
     <div class="rowtitle">
@@ -9,8 +8,7 @@
       <strong>When:</strong> {{ t.start_at|date:"M j, Y, P" }} → {{ t.end_at|date:"M j, Y, P" }}
       {% if t.place %}&nbsp; <strong>Where:</strong> {{ t.place }}{% endif %}
 
-      {# Keep your old capacity pill and add two more pills #}
-      {% if t.capacity %}
+            {% if t.capacity %}
         <span class="pill">Capacity: {{ t.capacity }}</span>
       {% endif %}
 

@@ -107,14 +107,12 @@ class Participation(models.Model):
     days = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     timespan = DateTimeRangeField(null=True, blank=True)
 
-    # ---- Audit fields for status changes ----
     status_changed_at = models.DateTimeField(null=True, blank=True)
     status_changed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="status_changes"
     )
-    status_comment = models.TextField(blank=True, default="")   # "why changed"
+    status_comment = models.TextField(blank=True, default="")
 
-    # ---- POS section ----
     COMPLETION_CHOICES = (
         ("", "—"),
         ("PASS", "Pass"),
@@ -124,7 +122,6 @@ class Participation(models.Model):
     feedback = models.TextField(blank=True, default="")
     pos_comment = models.TextField(blank=True, default="")
 
-    # ---- Soft removal ----
     removed_at = models.DateTimeField(null=True, blank=True)
     removed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -146,25 +143,21 @@ class Participation(models.Model):
                     ("person", "="),
                     ("timespan", "&&"),
                 ],
-                condition=Q(removed_at__isnull=True),  # ✅ IMPORTANT: ignore removed rows at DB level
+                condition=Q(removed_at__isnull=True),
             )
         ]
 
     def clean(self):
         super().clean()
 
-        # If training not set yet, skip
         if not self.training_id:
             return
 
-        # Ensure we have training times
         if not self.training.start_at or not self.training.end_at:
             return
 
-        # Keep timespan aligned (also done in save, but good for validation)
         self.timespan = Range(self.training.start_at, self.training.end_at, bounds='[)')
 
-        # Ignore removed participations and ignore self
         overlaps = Participation.objects.filter(
             person=self.person,
             removed_at__isnull=True,
@@ -180,7 +173,6 @@ class Participation(models.Model):
             })
 
     def save(self, *args, **kwargs):
-        # Always sync range from training dates
         self.timespan = Range(self.training.start_at, self.training.end_at, bounds='[)')
         self.full_clean()
         super().save(*args, **kwargs)
@@ -208,7 +200,6 @@ class EmailVerification(models.Model):
 
 
 class UseOfForceStandard(models.Model):
-    # ---- Gender ----
     GENDER_MALE = "M"
     GENDER_FEMALE = "F"
     GENDER_CHOICES = [
@@ -216,7 +207,6 @@ class UseOfForceStandard(models.Model):
         (GENDER_FEMALE, "Women"),
     ]
 
-    # ---- Exercises ----
     EXERCISE_PUSHUPS = "PUSHUPS"
     EXERCISE_SITUPS = "SITUPS"
     EXERCISE_RUN = "RUN"
@@ -227,7 +217,6 @@ class UseOfForceStandard(models.Model):
         (EXERCISE_RUN, "1000m run"),
     ]
 
-    # ---- Age groups ----
     AGE_UNDER_30 = "U29"
     AGE_30_34 = "30_34"
     AGE_35_39 = "35_39"
@@ -264,11 +253,8 @@ class UseOfForceStandard(models.Model):
     exercise = models.CharField(max_length=20, choices=EXERCISE_CHOICES)
     age_group = models.CharField(max_length=20, choices=AGE_GROUP_CHOICES)
 
-    # IMPORTANT: default avoids makemigrations asking questions
     age_sort = models.PositiveSmallIntegerField(default=999)
 
-    # For push-ups/sit-ups: integer repetitions.
-    # For 1000m run: store seconds (int) so we can display as MM:SS.
     minimum = models.IntegerField(default=0)
     good = models.IntegerField(default=0)
     very_good = models.IntegerField(default=0)
@@ -302,7 +288,7 @@ class UofAssessment(models.Model):
 
     pushups = models.PositiveSmallIntegerField(null=True, blank=True)
     situps = models.PositiveSmallIntegerField(null=True, blank=True)
-    run_seconds = models.PositiveSmallIntegerField(null=True, blank=True)  # store as seconds
+    run_seconds = models.PositiveSmallIntegerField(null=True, blank=True)
 
     pushups_rating = models.CharField(max_length=20, choices=UofRating.choices, blank=True, default="")
     situps_rating = models.CharField(max_length=20, choices=UofRating.choices, blank=True, default="")
@@ -336,7 +322,7 @@ class TrainingEmailLog(models.Model):
 
     delivery_status = models.CharField(max_length=10, choices=DELIVERY_CHOICES, default="LOGGED")
     error_message = models.TextField(blank=True, default="")
-    sent_to = models.EmailField(blank=True, default="")  # optional but very useful
+    sent_to = models.EmailField(blank=True, default="")
     
     training = models.ForeignKey(
         "Training",
@@ -344,7 +330,6 @@ class TrainingEmailLog(models.Model):
         related_name="email_logs",
     )
 
-    # ✅ Person recipient (normal participant emails) — now optional
     person = models.ForeignKey(
         "Person",
         null=True,
@@ -353,25 +338,20 @@ class TrainingEmailLog(models.Model):
         related_name="training_email_logs",
     )
 
-    # ✅ External recipient (academy / admin groups) — when person is NULL
     external_recipient_name = models.CharField(max_length=200, blank=True, default="")
     external_recipient_email = models.EmailField(blank=True, default="")
 
-    # What kind of email was this?
     template_type = models.CharField(
         max_length=20,
         choices=TEMPLATE_TYPE_CHOICES,
-        default="ASSIGNED",   # ✅ keep defaults consistent with your choices
+        default="ASSIGNED",
     )
 
-    # Snapshot at send time (so later it’s auditable)
     subject = models.CharField(max_length=255, blank=True, default="")
     body = models.TextField(blank=True, default="")
 
-    # Participation status at the moment the email was sent (optional but useful)
     status_at_send = models.CharField(max_length=12, blank=True, default="")
 
-    # Who triggered it
     sent_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -384,10 +364,8 @@ class TrainingEmailLog(models.Model):
 
     class Meta:
         indexes = [
-            # ✅ fast lookup for participant logs (person can be NULL, that's OK)
             models.Index(fields=["training", "person", "template_type"]),
             models.Index(fields=["person", "sent_at"]),
-            # ✅ fast lookup for external recipients
             models.Index(fields=["training", "external_recipient_email", "template_type"]),
         ]
         ordering = ["-sent_at"]

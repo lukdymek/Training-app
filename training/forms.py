@@ -24,11 +24,9 @@ class TrainingForm(forms.ModelForm):
         if start and end and end <= start:
             raise forms.ValidationError("End date/time must be after start date/time.")
 
-        # If editing an existing training, block date changes that would create overlaps
         if self.instance and self.instance.pk and start and end:
             new_range = Range(start, end, bounds='[)')
 
-            # People currently assigned to THIS training (trainees + trainers)
             person_ids = list(
                 Participation.objects.filter(training=self.instance)
                 .values_list("person_id", flat=True)
@@ -36,7 +34,6 @@ class TrainingForm(forms.ModelForm):
             )
 
             if person_ids:
-                # Any other participation for those people that overlaps the new range?
                 conflicts = (
                     Participation.objects.filter(person_id__in=person_ids)
                     .exclude(training=self.instance)
@@ -46,7 +43,6 @@ class TrainingForm(forms.ModelForm):
                 )
 
                 if conflicts.exists():
-                    # Show a readable message (first conflict only to keep it simple)
                     c = conflicts.first()
                     raise ValidationError(
                         f"Change not allowed: would create an overlap for {c.person} "
@@ -119,14 +115,13 @@ def seconds_to_mmss(seconds: int) -> str:
 
 
 class UseOfForceStandardForm(forms.ModelForm):
-    # we override fields so we can accept MM:SS for run
     minimum_display = forms.CharField(required=True)
     good_display = forms.CharField(required=True)
     very_good_display = forms.CharField(required=True)
 
     class Meta:
         model = UseOfForceStandard
-        fields = []  # handled manually
+        fields = []
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -152,12 +147,10 @@ class UseOfForceStandardForm(forms.ModelForm):
         vg_v = cleaned.get("very_good_display")
 
         if inst.exercise == UseOfForceStandard.EXERCISE_RUN:
-            # for run, smaller time is better
             minimum = mmss_to_seconds(min_v)
             good = mmss_to_seconds(good_v)
             very_good = mmss_to_seconds(vg_v)
 
-            # sanity: minimum >= good >= very_good (because minimum is worst/slowest)
             if not (minimum >= good >= very_good):
                 raise forms.ValidationError("For 1000m run: Minimum should be the slowest, Very good the fastest (e.g. 06:00 >= 05:00 >= 04:20).")
 
@@ -166,7 +159,6 @@ class UseOfForceStandardForm(forms.ModelForm):
             inst.very_good = very_good
 
         else:
-            # reps: bigger is better
             try:
                 minimum = int(min_v)
                 good = int(good_v)
@@ -187,7 +179,6 @@ class UseOfForceStandardForm(forms.ModelForm):
         return cleaned
 
     def save(self, commit=True):
-        # instance fields already set in clean()
         if commit:
             self.instance.save()
         return self.instance

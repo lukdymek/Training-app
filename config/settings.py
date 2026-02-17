@@ -12,14 +12,10 @@ ADMIN_CSS = "admin/custom.css"
 BASE_DIR = Path(__file__).resolve().parent.parent
 STATICFILES_DIRS = [BASE_DIR / "static"]
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "calendar"   # where to send users after login
+LOGIN_REDIRECT_URL = "calendar"
 LOGOUT_REDIRECT_URL = "login"
 
-# -----------------------------
-# Email configuration
-# -----------------------------
 
-# Load .env locally (Railway injects env vars automatically)
 if os.environ.get("RAILWAY_ENVIRONMENT") is None:
     try:
         from dotenv import load_dotenv
@@ -34,13 +30,11 @@ EMAIL_BACKEND = os.environ.get(
 )
 
 
-# ---- Mailgun via django-anymail ----
 if EMAIL_BACKEND in (
     "anymail.backends.sendinblue.EmailBackend",
     "anymail.backends.brevo.EmailBackend",
 ):
     ANYMAIL = {
-        # Anymail will look for SENDINBLUE_API_KEY in ANYMAIL
         "SENDINBLUE_API_KEY": os.environ.get("SENDINBLUE_API_KEY", ""),
     }
 
@@ -50,7 +44,6 @@ if EMAIL_BACKEND in (
     )
 
 
-# ---- SMTP fallback (gmail etc) ----
 elif EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
 
     EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
@@ -65,7 +58,6 @@ elif EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend":
     )
 
 
-# ---- Console backend (dev default) ----
 else:
     DEFAULT_FROM_EMAIL = os.environ.get(
         "DEFAULT_FROM_EMAIL",
@@ -74,9 +66,6 @@ else:
 
 
 
-# ------------------------------------------------------------------------------
-# ENVIRONMENT
-# ------------------------------------------------------------------------------
 
 DEBUG = os.environ.get("DEBUG", "0") == "1"
 IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT") is not None
@@ -84,9 +73,6 @@ IS_RAILWAY = os.environ.get("RAILWAY_ENVIRONMENT") is not None
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only")
 
 
-# ------------------------------------------------------------------------------
-# HOSTS / CSRF
-# ------------------------------------------------------------------------------
 
 if DEBUG:
     ALLOWED_HOSTS = ["*"]
@@ -104,13 +90,9 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 
-# ------------------------------------------------------------------------------
-# DATABASE
-# ------------------------------------------------------------------------------
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# 🚨 Railway MUST have DATABASE_URL
 if IS_RAILWAY and not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is required on Railway but is not set")
 
@@ -123,7 +105,6 @@ if DATABASE_URL:
         )
     }
 else:
-    # Local development (Postgres)
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -136,9 +117,6 @@ else:
     }
 
 
-# ------------------------------------------------------------------------------
-# APPLICATIONS
-# ------------------------------------------------------------------------------
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -155,9 +133,6 @@ INSTALLED_APPS = [
 ]
 
 
-# ------------------------------------------------------------------------------
-# MIDDLEWARE
-# ------------------------------------------------------------------------------
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -172,9 +147,6 @@ MIDDLEWARE = [
 ]
 
 
-# ------------------------------------------------------------------------------
-# URLS / TEMPLATES
-# ------------------------------------------------------------------------------
 
 ROOT_URLCONF = "config.urls"
 
@@ -196,9 +168,6 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 
-# ------------------------------------------------------------------------------
-# STATIC FILES
-# ------------------------------------------------------------------------------
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
@@ -211,9 +180,6 @@ STORAGES = {
 }
 
 
-# ------------------------------------------------------------------------------
-# PASSWORD VALIDATION
-# ------------------------------------------------------------------------------
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -223,9 +189,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# ------------------------------------------------------------------------------
-# INTERNATIONALIZATION
-# ------------------------------------------------------------------------------
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -233,9 +196,6 @@ USE_I18N = True
 USE_TZ = True
 
 
-# ------------------------------------------------------------------------------
-# LOGGING (show only real errors)
-# ------------------------------------------------------------------------------
 
 LOGGING = {
     "version": 1,

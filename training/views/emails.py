@@ -41,12 +41,10 @@ def _infer_participant_template_type(template) -> str:
 def training_email_log_assigned(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
-    # Block if any PENDING participants exist (trainees or trainers)
     if Participation.objects.filter(training=training, status="PENDING", removed_at__isnull=True).exists():
         messages.error(request, "Cannot send emails: some participants are still PENDING. Please resolve them first.")
         return redirect("training_detail", pk=pk)
 
-    # Select active AUTHORISED participants
     participants = (
         Participation.objects
         .filter(training=training, removed_at__isnull=True, status="AUTHORISED")
@@ -59,7 +57,6 @@ def training_email_log_assigned(request, pk):
     for part in participants:
         person = part.person
 
-        # Don’t duplicate: if already logged as ASSIGNED, skip
         if TrainingEmailLog.objects.filter(training=training, person=person, template_type="ASSIGNED").exists():
             skipped += 1
             continue
@@ -106,7 +103,6 @@ def training_email_summary(request, pk):
 def training_email_compose(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
-    # ---- Active participations (used for participant modes) ----
     active_parts = (
         Participation.objects
         .filter(training=training, removed_at__isnull=True)
@@ -114,7 +110,6 @@ def training_email_compose(request, pk):
     )
     pending_count = active_parts.filter(status="PENDING").count()
 
-    # ---- UI selections (mode, group, template) ----
     recipient_mode = (request.GET.get("mode") or request.POST.get("mode") or "admin_group").strip().lower()
     if recipient_mode not in ("participants", "trainees", "trainers", "admin_group"):
         recipient_mode = "participants"
@@ -127,7 +122,6 @@ def training_email_compose(request, pk):
     if group_id.isdigit():
         selected_group = groups.filter(id=int(group_id)).first()
 
-    # ---- Templates list depends on recipient mode ----
     if recipient_mode == "admin_group":
         templates = EmailTemplate.objects.filter(is_active=True, kind="ADMIN").order_by("name")
     else:
@@ -158,13 +152,11 @@ def training_email_compose(request, pk):
         url = reverse("training_email_compose", kwargs={"pk": pk})
         return redirect(f"{url}?{urlencode(params)}")
 
-    # ---- Build recipients + status map (for participants) ----
     people_list = []
     status_map = {}
     role_map = {}
 
     if recipient_mode != "admin_group":
-        # Roles included by mode
         if recipient_mode == "trainees":
             roles = ["TRAINEE"]
         elif recipient_mode == "trainers":
@@ -172,22 +164,19 @@ def training_email_compose(request, pk):
         else:
             roles = ["TRAINEE", "TRAINER"]
 
-        # STATUS_CHANGE emails are for people currently in a changed terminal status.
         if template_type == "STATUS_CHANGE":
             candidates = active_parts.filter(status__in=["REJECTED", "WITHDRAWN"], role__in=roles)
         else:
             candidates = active_parts.filter(status="AUTHORISED", role__in=roles)
 
-        # Unique people list
         people_map = {}
         for part in candidates:
             if part.person_id:
                 people_map[part.person_id] = part.person
                 status_map[part.person_id] = part.status
-                role_map[part.person_id] = part.role  # <-- IMPORTANT
+                role_map[part.person_id] = part.role
         people_list = list(people_map.values())
 
-    # ---- Up-to-date rules ----
     def has_current_status_log(person, current_status):
         if not current_status:
             return False
@@ -199,11 +188,9 @@ def training_email_compose(request, pk):
         ).exists()
 
     def should_log_person(person, current_status):
-        # For STATUS_CHANGE, skip when the same current status was already logged.
         if template_type == "STATUS_CHANGE":
             return not has_current_status_log(person, current_status)
 
-        # For other template types, keep duplicate-by-template behavior.
         return not TrainingEmailLog.objects.filter(
             training=training,
             person=person,
@@ -219,7 +206,6 @@ def training_email_compose(request, pk):
 
 
     def should_log_admin(rec):
-        # True = should create a NEW admin log (no duplicate of same template_type + email)
         return not TrainingEmailLog.objects.filter(
             training=training,
             external_recipient_email=rec.email,
@@ -261,7 +247,6 @@ def training_email_compose(request, pk):
 
         return  trainees_block, trainers_block
 
-    # ---- Build recipient_rows + counts ----
     recipient_rows = []
     will_send = 0
     will_skip = 0
@@ -273,7 +258,7 @@ def training_email_compose(request, pk):
 
         for rec in recipients:
             email_ok = bool((rec.email or "").strip())
-            up_to_date = email_ok and (not should_log_admin(rec))  # already logged
+            up_to_date = email_ok and (not should_log_admin(rec))
 
             if not email_ok:
                 action = "skip"
@@ -299,9 +284,8 @@ def training_email_compose(request, pk):
         for person in people_list:
             email_ok = bool((person.email or "").strip())
             current_status = status_map.get(person.id, "")
-            up_to_date = email_ok and (not should_log_person(person, current_status))  # already logged
+            up_to_date = email_ok and (not should_log_person(person, current_status))
 
-            # NEW RULE: status change only if assigned was logged before
             needs_assigned_first = (template_type == "STATUS_CHANGE")
             has_assigned = has_assigned_log(person) if needs_assigned_first else True
 
@@ -330,7 +314,6 @@ def training_email_compose(request, pk):
             })
 
 
-    # ---- Preview (GET only): render for first recipient ----
     preview_person = None
     preview_subject = ""
     preview_body = ""
@@ -360,7 +343,7 @@ def training_email_compose(request, pk):
                     "person": preview_person,
                     "status": status_map.get(preview_person.id, ""),
                     "role": _role,
-                    "role_label": (_role or "").replace("_", " ").title(),  # e.g. TRAINEE -> Trainee
+                    "role_label": (_role or "").replace("_", " ").title(),
                     "role_map": role_map,
 
                 }
@@ -368,16 +351,13 @@ def training_email_compose(request, pk):
                 preview_subject = render_email_text(subject, ctx)
                 preview_body = render_email_text(body, ctx)
 
-    # ---- POST: create logs (no real sending) ----
     if request.method == "POST":
 
-        # Admin group requires a selected group
         if recipient_mode == "admin_group" and not group_id:
             messages.error(request, "Please select an admin group before sending/logging.")
             return compose_redirect()
 
 
-        # Only block on PENDING for participant emails
         if recipient_mode != "admin_group" and pending_count > 0:
             messages.error(
                 request,
@@ -441,7 +421,6 @@ def training_email_compose(request, pk):
                     skipped_no_email += 1
                     continue
 
-                # STATUS_CHANGE requires an ASSIGNED baseline first
                 if template_type == "STATUS_CHANGE" and not has_assigned_log(person):
                     skipped_no_assigned += 1
                     continue
@@ -488,7 +467,6 @@ def training_email_compose(request, pk):
         if skipped_no_assigned:
             messages.warning(request, f"Skipped {skipped_no_assigned} recipient(s) (no ASSIGNED email logged yet).")
 
-        # Redirect to logs so you can immediately see what was created
         return redirect("training_email_logs", pk=pk)
 
     return render(
@@ -500,12 +478,10 @@ def training_email_compose(request, pk):
             "recipient_mode": recipient_mode,
             "template_type": template_type,
 
-            # admin groups
             "groups": groups,
             "group_id": group_id,
             "selected_group": selected_group,
 
-            # templates
             "templates": templates,
             "selected_template": selected_template,
             "template_id": (
@@ -514,17 +490,14 @@ def training_email_compose(request, pk):
                 else (str(default_template.id) if default_template else "")
             ),
 
-            # message content
             "subject": subject,
             "body": body,
 
-            # recipients preview
             "people": people_list,
             "recipient_rows": recipient_rows,
             "will_send": will_send,
             "will_skip": will_skip,
 
-            # preview
             "preview_person": preview_person,
             "preview_subject": preview_subject,
             "preview_body": preview_body,
@@ -549,18 +522,15 @@ def training_email_logs(request, pk):
         .order_by("-sent_at")
     )
 
-    # ---- Filters ----
     if type_filter in ("ASSIGNED", "STATUS_CHANGE", "ADMIN_SUMMARY"):
         qs = qs.filter(template_type=type_filter)
 
-    # Only applies to participant logs (person-based logs)
     if sysper.isdigit():
         qs = qs.filter(person__sysper_id=int(sysper))
 
     if sent_by.isdigit():
         qs = qs.filter(sent_by_id=int(sent_by))
 
-    # Search across subject/body + person + external recipients
     if q:
         qs = qs.filter(
             Q(subject__icontains=q) |
@@ -572,12 +542,10 @@ def training_email_logs(request, pk):
             Q(external_recipient_email__icontains=q)
         )
 
-    # ---- Pagination ----
-    paginator = Paginator(qs, 25)   # 25 logs per page
+    paginator = Paginator(qs, 25)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    # ---- Sender dropdown values ----
     senders = (
         TrainingEmailLog.objects
         .filter(training=training, sent_by__isnull=False)
@@ -601,16 +569,13 @@ def training_email_logs(request, pk):
         {
             "training": training,
 
-            # paginated rows
             "rows": page_obj,
             "page_obj": page_obj,
 
-            # filters
             "type_filter": type_filter,
             "sysper": sysper,
             "sent_by": sent_by,
 
-            # dropdown data
             "senders": senders,
 
             "q": q,
@@ -655,7 +620,6 @@ def training_email_logs_export_csv(request, pk):
         .order_by("-sent_at")
     )
 
-    # --- Filters ---
     if type_filter in ("ASSIGNED", "STATUS_CHANGE"):
         qs = qs.filter(template_type=type_filter)
 
@@ -665,7 +629,6 @@ def training_email_logs_export_csv(request, pk):
     if sent_by.isdigit():
         qs = qs.filter(sent_by_id=int(sent_by))
 
-    # ✅ Search
     if q:
         qs = qs.filter(
             Q(subject__icontains=q) |
@@ -674,7 +637,6 @@ def training_email_logs_export_csv(request, pk):
             Q(person__last_name__icontains=q)
         )
 
-    # --- CSV ---
     resp = HttpResponse(content_type="text/csv")
     resp["Content-Disposition"] = (
         f'attachment; filename="email_logs_training_{training.id}.csv"'
@@ -732,7 +694,6 @@ def training_email_resend_one(request, pk, person_id):
     subject = (request.POST.get("subject") or "").strip()
     body = (request.POST.get("body") or "").strip()
 
-    # Only allow if the person is currently active+authorised on this training (any role)
     part = Participation.objects.filter(
         training=training,
         person=person,
@@ -771,7 +732,6 @@ def training_email_resend_one(request, pk, person_id):
 def training_email_admin_compose(request, pk):
     training = get_object_or_404(Training, pk=pk)
 
-    # --- participations (ACTIVE only) ---
     active_parts = (
         Participation.objects
         .filter(training=training, removed_at__isnull=True)
@@ -780,14 +740,12 @@ def training_email_admin_compose(request, pk):
 
     pending_count = active_parts.filter(status="PENDING").count()
 
-    # Only AUTHORISED in the admin summary (your decision)
     authorised_parts = (
         active_parts
         .filter(status="AUTHORISED")
         .order_by("role", "person__last_name", "person__first_name")
     )
 
-    # --- recipients: group or single ---
     groups = EmailRecipientGroup.objects.filter(is_active=True).order_by("name")
     singles = EmailRecipient.objects.filter(is_active=True).order_by("name")
 
@@ -801,13 +759,11 @@ def training_email_admin_compose(request, pk):
     selected_group = groups.filter(id=int(group_id)).first() if group_id.isdigit() else None
     selected_recipient = singles.filter(id=int(recipient_id)).first() if recipient_id.isdigit() else None
 
-    # Resolve final recipients (list of EmailRecipient)
     if recipient_mode == "single":
         recipient_list = [selected_recipient] if selected_recipient else []
     else:
         recipient_list = list(selected_group.recipients.filter(is_active=True)) if selected_group else []
 
-    # --- templates (ADMIN kind) ---
     templates = EmailTemplate.objects.filter(is_active=True, kind="ADMIN").order_by("name")
 
     template_id = request.GET.get("template_id") or request.POST.get("template_id") or ""
@@ -820,7 +776,6 @@ def training_email_admin_compose(request, pk):
     subject = (request.POST.get("subject") if request.method == "POST" else None) or subject_prefill
     body = (request.POST.get("body") if request.method == "POST" else None) or body_prefill
 
-    # --- build participant summary text (AUTHORISED only) ---
     def build_participant_lines(qs):
         trainers = qs.filter(role="TRAINER")
         trainees = qs.filter(role="TRAINEE")
@@ -839,7 +794,7 @@ def training_email_admin_compose(request, pk):
         else:
             lines.append("- (none)")
 
-        lines.append("")  # blank line
+        lines.append("")
 
         lines.append("TRAINEES (AUTHORISED):")
         if trainees.exists():
@@ -857,7 +812,6 @@ def training_email_admin_compose(request, pk):
 
     participants_text = build_participant_lines(authorised_parts)
 
-    # --- preview (GET): show rendered message for first recipient ---
     preview_to = recipient_list[0] if recipient_list else None
     preview_subject = ""
     preview_body = ""
@@ -871,12 +825,10 @@ def training_email_admin_compose(request, pk):
         preview_subject = render_email_text(subject, ctx)
         preview_body = render_email_text(body, ctx)
 
-    # --- counts for UI ---
     will_send = 0
     will_skip = 0
 
     def should_log_admin(recipient):
-        # Up-to-date rule: if we already logged ADMIN_SUMMARY to this email, skip
         return not TrainingEmailLog.objects.filter(
             training=training,
             template_type="ADMIN_SUMMARY",
@@ -907,7 +859,6 @@ def training_email_admin_compose(request, pk):
             "reason": reason,
         })
 
-    # --- POST: create logs (log-only) ---
     if request.method == "POST":
         if pending_count > 0:
             messages.error(
