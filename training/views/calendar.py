@@ -9,10 +9,12 @@ from django.utils.timezone import localtime
 from ..models import Subject, Training
 
 
+@login_required
 def calendar_view(request):
     return render(request, "training/calendar.html")
 
 
+@login_required
 def calendar_filters(request):
     subjects = list(Subject.objects.order_by("name").values("id", "name"))
     locations = list(

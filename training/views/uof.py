@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 from training.docx_utils import fill_bookmarks
 from training.models import Participation, Training, UseOfForceStandard, UofAssessment, UofRating
 
-from .common import staff_required
+from .common import staff_required, superuser_required
 
 
 
@@ -50,6 +50,7 @@ def mmss_to_seconds(value: str) -> int:
 
 
 @login_required
+@superuser_required
 def uof_standards(request):
     gender = (request.GET.get("gender") or UseOfForceStandard.GENDER_MALE).upper()
     if gender not in (UseOfForceStandard.GENDER_MALE, UseOfForceStandard.GENDER_FEMALE):

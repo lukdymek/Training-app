@@ -52,7 +52,12 @@ This system is designed for operational training administration:
 
 - Authentication: Django auth
 - Authorization:
-  - Many operational endpoints guarded by `@login_required` + `staff_required`
+  - Login is required for all application pages and APIs (except login/register/logout endpoints).
+  - Regular users can access only:
+    - `calendar`
+    - `my history` (their own record)
+  - Staff users can access operational areas.
+  - UOF standards table is restricted to superusers.
   - Unauthorized access raises HTTP 403 (`training.views.custom_403`)
 - CSRF protection: enabled via Django middleware
 - Clickjacking protection: Django middleware enabled
@@ -153,10 +158,61 @@ Common management commands:
 - `python manage.py check`
 - `python manage.py migrate`
 - `python manage.py collectstatic --noinput`
-- `python manage.py import_people`
-- `python manage.py seed_use_of_force`
+- `python manage.py import_people <path_to_people.xlsx>`
+- `python manage.py assign_contingent_from_deployment --only-empty`
 - `python manage.py seed_uof_standards`
-- `python manage.py create_users_from_people`
+- `python manage.py create_users_from_people` (optional; accounts can also be created during self-registration)
+- `python manage.py seed_use_of_force` (dev/demo dummy data only)
+
+### 10.1 Fresh Database Bootstrap (handoff procedure)
+
+Use this sequence when handing the app to a new environment with an empty database:
+
+1. Apply schema:
+   - `python manage.py migrate`
+2. Create initial admin account:
+   - `python manage.py createsuperuser`
+3. Import people source file (Excel `.xlsx` export):
+   - `python manage.py import_people <path_to_people.xlsx>`
+4. Populate `Person.contingent` from deployment names:
+   - `python manage.py assign_contingent_from_deployment --only-empty`
+5. Seed UOF evaluation thresholds:
+   - `python manage.py seed_uof_standards`
+6. Optional pre-provisioning of auth users:
+   - `python manage.py create_users_from_people`
+
+Notes:
+
+
+
+### 10.2 First-Day Admin Checklist
+
+After bootstrap, run this quick validation:
+
+1. Login with the superuser account.
+2. Verify people import:
+   - Open People list and confirm records are present.
+   - Spot-check a few `sysper_id`, email, deployment values.
+3. Verify contingent mapping:
+   - Confirm `contingent` is populated for expected people.
+4. Verify UOF standards:
+   - Open UOF standards page as superuser and confirm rows exist for both genders and all age groups.
+5. Verify role-based access:
+   - Test with a regular user account:
+     - can access calendar
+     - can access own `my history`
+     - cannot access staff pages (trainings, people list, reports, UOF admin pages)
+6. Verify registration flow:
+   - Use an email that exists in `Person`.
+   - Complete code verification + password set.
+   - Confirm login works.
+7. Verify one end-to-end training action as staff:
+   - create a training
+   - add one trainee
+   - update participation status
+8. Verify reporting/export:
+   - open person report and export CSV
+   - open trainer-days report and export CSV
 
 ## 11. Current Email Behavior (Important)
 
@@ -184,4 +240,3 @@ Registration verification still uses Django email backend settings if enabled.
 - The codebase has been refactored to modular view files under `training/views/`.
 - Legacy monolithic view file has been removed from active routing.
 - This README is intended for internal deployment and security review context.
-

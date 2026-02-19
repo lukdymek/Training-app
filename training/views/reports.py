@@ -64,6 +64,8 @@ def _pretty_rating(value):
     return txt.replace("_", " ").capitalize()
 
 
+@login_required
+@staff_required
 def reports_home(request):
     return render(request, "training/reports_home.html")
 

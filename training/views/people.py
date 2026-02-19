@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import JsonResponse
@@ -42,9 +43,13 @@ def _with_completion_display(rows):
 
 
 @login_required
-@staff_required
 def person_history(request, person_id):
     person = get_object_or_404(Person, pk=person_id)
+    if not request.user.is_staff:
+        user_email = (request.user.email or "").strip().lower()
+        person_email = (person.email or "").strip().lower()
+        if (not user_email) or (user_email != person_email):
+            raise PermissionDenied
     t = now()
 
     base_qs = (

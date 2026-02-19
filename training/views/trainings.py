@@ -737,10 +737,8 @@ def training_finder(request):
 
 @require_POST
 @login_required
+@staff_required
 def participation_set_status(request, participation_id):
-    if not request.user.is_staff:
-        return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
-
     participation = get_object_or_404(Participation, id=participation_id)
 
     new_status = (request.POST.get("status") or "").strip().upper()
@@ -823,10 +821,8 @@ def participation_set_status(request, participation_id):
 
 
 @login_required
+@staff_required
 def participation_edit(request, participation_id):
-    if not request.user.is_staff:
-        return render(request, "training/forbidden_nice.html", status=403)
-
     participation = get_object_or_404(Participation, id=participation_id)
     subj_name = (getattr(participation.training.subject, "name", "") or "").strip().lower()
     is_uof = subj_name in ("use of force", "uof")
