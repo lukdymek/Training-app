@@ -3,6 +3,7 @@
 import django.contrib.postgres.constraints
 import django.contrib.postgres.fields.ranges
 import django.contrib.postgres.indexes
+import django.contrib.postgres.operations
 from django.db import migrations
 
 
@@ -13,6 +14,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        django.contrib.postgres.operations.BtreeGistExtension(),
         migrations.AddField(
             model_name='participation',
             name='timespan',
@@ -27,3 +29,4 @@ class Migration(migrations.Migration):
             constraint=django.contrib.postgres.constraints.ExclusionConstraint(expressions=[('person', '='), ('timespan', '&&')], name='no_overlapping_participation_per_person'),
         ),
     ]
+

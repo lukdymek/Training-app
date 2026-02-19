@@ -162,6 +162,7 @@ Common management commands:
 - `python manage.py assign_contingent_from_deployment --only-empty`
 - `python manage.py seed_uof_standards`
 - `python manage.py create_users_from_people` (optional; accounts can also be created during self-registration)
+- `python manage.py load_email_templates`
 - `python manage.py seed_use_of_force` (dev/demo dummy data only)
 
 ### 10.1 Fresh Database Bootstrap (handoff procedure)
@@ -240,3 +241,69 @@ Registration verification still uses Django email backend settings if enabled.
 - The codebase has been refactored to modular view files under `training/views/`.
 - Legacy monolithic view file has been removed from active routing.
 - This README is intended for internal deployment and security review context.
+
+## 14. Docker Handoff
+
+This repository includes:
+
+- `Dockerfile`
+- `.dockerignore`
+- `docker-compose.yml` (app + PostgreSQL for local/IT validation)
+
+### 14.1 Build and run (single container)
+
+1. Build image:
+   - `docker build -t training-app:latest .`
+2. Run container with env file:
+   - `docker run --rm -p 8000:8000 --env-file .env training-app:latest`
+
+### 14.2 Build and run (docker compose)
+
+1. Start stack:
+   - `docker compose up --build -d`
+2. Check logs:
+   - `docker compose logs -f web`
+3. Stop stack:
+   - `docker compose down`
+
+### 14.3 First-time DB bootstrap in Docker
+
+After containers are up:
+
+1. Create admin:
+   - `docker compose exec web python manage.py createsuperuser`
+2. Copy people file into web container (example):
+   - `docker cp ./people.xlsx training-web:/tmp/people.xlsx`
+3. Import people (CLI option):
+   - docker compose exec web python manage.py import_people /tmp/people.xlsx
+   - Alternative (admin UI): Login as superuser -> Persons -> Import from Excel
+4. Fill contingent:
+   - `docker compose exec web python manage.py assign_contingent_from_deployment --only-empty`
+5. Seed UOF standards:
+   - `docker compose exec web python manage.py seed_uof_standards`
+6. Load email templates:
+   - 'docker compose exex web python manage.py load_email_templates'
+
+### 14.4 Production notes
+
+- Replace sample secrets/passwords in `docker-compose.yml`.
+- Set `DEBUG=0`.
+- Set real `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`.
+- Use managed PostgreSQL or secure volume backup policy.
+- Do not commit real `.env` values.
+### 14.5 Reviewer Handoff Checklist
+
+If you want others to validate the app quickly, share:
+
+- GitHub repository URL (full codebase)
+- A .env.example file with safe sample values (no real secrets)
+- These exact startup commands:
+  - docker compose up --build
+  - docker compose exec web python manage.py createsuperuser
+
+Optional bootstrap data commands:
+
+- docker compose exec web python manage.py import_people /tmp/people.xlsx
+- docker compose exec web python manage.py assign_contingent_from_deployment --only-empty
+- docker compose exec web python manage.py seed_uof_standards
+- docker compose exec web python manage.py load_email_templates
